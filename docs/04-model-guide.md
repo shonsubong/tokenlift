@@ -84,25 +84,24 @@ ollama pull qwen2.5-coder:32b
 # 일회성: tokenlift gen "..." -m qwen2.5-coder:32b
 ```
 
-## 4.7 온프렘 NemoClaw / NIM 모델
+## 4.7 온프렘 GPU 클러스터 모델 (H200 / V100, Ollama 특화 모델)
 
-`--provider nemoclaw`(OpenAI 호환) 사용 시 모델명은 **NIM 카탈로그/배포 ID** 형식이다
-(Ollama 태그와 다름). 라우팅은 `config.providers.nemoclaw.routing` 에서 별도로 관리한다.
+H200×8 / V100×8 하드웨어 위에서 **Ollama 에 여러 특화 모델을 올려 task별로 라우팅**한다
+(`config.providers.onprem-h200|onprem-v100.routing`). 모델은 **Ollama 태그**.
 
-| 용도 | NIM 모델 예시(배포에 맞게 교체) |
-|---|---|
-| 코드 생성/테스트/리팩터 | `qwen/qwen2.5-coder-32b-instruct` |
-| 대형/에이전트형 추론 | `nvidia/llama-3.1-nemotron-70b-instruct` |
-| 경량/요약/문서 | `meta/llama-3.1-8b-instruct` |
+| 역할 | 클러스터 | 코드 | 추론 | FIM | 문서/경량 |
+|---|---|---|---|---|---|
+| oracle | H200 | `qwen2.5-coder:32b` | `deepseek-r1:70b` | `qwen2.5-coder:7b` | `llama3.3:70b` |
+| coder | V100 | `qwen2.5-coder:14b` | `deepseek-r1:14b` | `qwen2.5-coder:1.5b-base` | `llama3.1:8b` |
 
 ```bash
-# 서버가 실제 제공하는 모델 확인
-tokenlift models --provider nemoclaw
-# 일회성 모델 지정
-tokenlift gen "..." --provider nemoclaw -m qwen/qwen2.5-coder-32b-instruct
+tokenlift models --provider onprem-h200          # 클러스터 보유 태그 확인
+tokenlift gen "..." --role coder                 # = onprem-v100(폴백 체인)
+tokenlift gen "..." --provider onprem-h200 -m deepseek-r1:70b
 ```
 
-> 기본값은 NVIDIA 카탈로그 **예시명**이다. 반드시 사내에 배포된 실제 모델 ID로 교체하라.
-> 자세한 설정은 [11. 백엔드 확장](11-providers.md).
+> 큰/고정밀 모델은 H200, 중소·양자화(GGUF Q4/Q5) 모델은 V100. 태그는 **예시**이니 클러스터에
+> 실제 pull 한 모델로 교체. NemoClaw/NIM 으로 서빙하면 모델명은 NIM 카탈로그 ID 형식이 된다
+> (`config.providers.nemoclaw`). 역할·폴백·비용은 [13. 멀티모델 에이전트](13-multi-model-agents.md).
 
 설치/구성 절차는 [08. 설치/설정](08-installation.md) 참조.

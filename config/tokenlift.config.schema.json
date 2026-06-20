@@ -59,15 +59,28 @@
     },
     "roles": {
       "type": "object",
-      "description": "에이전트 역할 → 백엔드 매핑(오케스트레이터-워커 협업). 'claude'/'codebase-memory-mcp' 는 가이드 라벨.",
+      "description": "에이전트 역할 → 폴백 체인(oh-my-openagent fallbackChain 반영). 앞에서부터 호출 가능한 첫 백엔드 사용, 실패 시 자동 강등. 'claude'/'codebase-memory-mcp' 는 종단 라벨(직접 처리).",
       "additionalProperties": {
         "type": "object",
         "properties": {
-          "provider": { "type": "string", "description": "역할이 사용할 provider 또는 라벨(claude/codebase-memory-mcp)" },
-          "model": { "type": "string", "description": "(선택) 모델 강제" },
+          "chain": {
+            "type": "array",
+            "description": "우선순위(싼/적합→폴백) 백엔드 목록. provider 이름(문자열) 또는 {provider, model}.",
+            "items": {
+              "oneOf": [
+                { "type": "string" },
+                {
+                  "type": "object",
+                  "properties": { "provider": { "type": "string" }, "model": { "type": "string" } },
+                  "required": ["provider"]
+                }
+              ]
+            }
+          },
+          "provider": { "type": "string", "description": "(구형) 단일 provider — chain 권장" },
+          "style": { "type": "string", "description": "작업 스타일(orchestration/deep-reasoning/bulk-code/retrieval/judgment)" },
           "desc": { "type": "string" }
-        },
-        "required": ["provider"]
+        }
       }
     },
     "escalation": {

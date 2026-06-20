@@ -41,64 +41,71 @@ const DEFAULTS = {
         },
       },
     },
-    // ── 온프렘 GPU 클러스터 (OpenAI 호환: vLLM / SGLang / TGI / NIM 로 서빙) ──
-    // H200 ×8 (≈1.1TB HBM3e, FP8/대형 MoE): 프런티어 오픈모델 = Oracle 역할(어려운 추론·대형 생성)
+    // ── 온프렘 GPU 클러스터 ──
+    // H200×8 / V100×8 은 "하드웨어"다. 그 위에서 Ollama(다양한 특화 모델) 또는 NemoClaw/NIM 을
+    // 서빙한다. 기본은 type:'ollama'(여러 특화 모델을 task별로 매핑, FIM·keep_alive·warmup 네이티브).
+    // NemoClaw/NIM/vLLM 로 서빙한다면 type:'openai-compat' + apiPath + apiKeyEnv 로 교체.
+    //
+    // H200×8 (≈1.1TB HBM3e, 고속/대형): Oracle 역할 — 어려운 추론·대형 생성. 큰 특화 모델 적재.
     'onprem-h200': {
-      type: 'openai-compat',
-      host: 'http://h200.internal:8000', // 사내 H200 추론 엔드포인트로 교체
-      apiPath: '/v1',
-      apiKeyEnv: 'ONPREM_API_KEY',
-      supportsFIM: false,
-      models: [],
+      type: 'ollama',
+      host: 'http://h200.internal:11434', // 사내 H200 Ollama 엔드포인트로 교체
+      keepAlive: '30m',
+      numCtx: 16384,
       routing: {
-        // 예시명 — 실제 배포 모델로 교체. H200 는 FP8/대형 MoE 가능.
-        default: 'deepseek-ai/DeepSeek-R1',
+        // Ollama 태그 예시 — 클러스터에 pull 된 실제 특화 모델로 교체.
+        default: 'qwen2.5-coder:32b',
         byTask: {
-          reason: 'deepseek-ai/DeepSeek-R1',
-          agent: 'Qwen/Qwen3-Coder-480B-A35B-Instruct',
-          gen: 'Qwen/Qwen3-Coder-480B-A35B-Instruct',
-          refactor: 'Qwen/Qwen3-Coder-480B-A35B-Instruct',
-          test: 'Qwen/Qwen3-Coder-480B-A35B-Instruct',
-          translate: 'Qwen/Qwen3-Coder-480B-A35B-Instruct',
-          review: 'deepseek-ai/DeepSeek-R1',
-          explain: 'Qwen/Qwen3-235B-A22B-Instruct',
-          docs: 'Qwen/Qwen3-235B-A22B-Instruct',
+          reason: 'deepseek-r1:70b', // 추론 특화
+          agent: 'devstral:24b', // 에이전트형 멀티파일
+          gen: 'qwen2.5-coder:32b',
+          edit: 'qwen2.5-coder:32b',
+          test: 'qwen2.5-coder:32b',
+          refactor: 'qwen2.5-coder:32b',
+          translate: 'qwen2.5-coder:32b',
+          review: 'deepseek-r1:70b',
+          explain: 'qwen2.5-coder:32b',
+          docs: 'llama3.3:70b',
+          complete: 'qwen2.5-coder:7b', // FIM
         },
       },
     },
-    // V100 ×8 (≈256GB @32GB, FP16 전용 — bf16/FP8 미지원): 중소 코드모델 = Coder 역할(대량·최저가)
+    // V100×8 (≈256GB@32GB, 구형): Coder 역할 — 대량·정형 생성(최저가). 중소/양자화(GGUF) 특화 모델.
     'onprem-v100': {
-      type: 'openai-compat',
-      host: 'http://v100.internal:8000', // 사내 V100 추론 엔드포인트로 교체
-      apiPath: '/v1',
-      apiKeyEnv: 'ONPREM_API_KEY',
-      supportsFIM: false,
-      models: [],
+      type: 'ollama',
+      host: 'http://v100.internal:11434', // 사내 V100 Ollama 엔드포인트로 교체
+      keepAlive: '30m',
+      numCtx: 8192,
       routing: {
-        // 예시명 — V100 은 FP16 또는 AWQ/GPTQ INT4 양자화로 적재(FP8/bf16 불가).
-        default: 'Qwen/Qwen2.5-Coder-32B-Instruct',
+        // Ollama GGUF(Q4/Q5)는 Volta(V100)에서도 동작. 중소 특화 모델 위주.
+        default: 'qwen2.5-coder:14b',
         byTask: {
-          gen: 'Qwen/Qwen2.5-Coder-32B-Instruct',
-          edit: 'Qwen/Qwen2.5-Coder-32B-Instruct',
-          test: 'Qwen/Qwen2.5-Coder-32B-Instruct',
-          refactor: 'Qwen/Qwen2.5-Coder-32B-Instruct',
-          translate: 'Qwen/Qwen2.5-Coder-32B-Instruct',
-          docs: 'meta-llama/Llama-3.1-8B-Instruct',
-          explain: 'meta-llama/Llama-3.1-8B-Instruct',
-          fast: 'meta-llama/Llama-3.1-8B-Instruct',
+          gen: 'qwen2.5-coder:14b',
+          edit: 'qwen2.5-coder:14b',
+          test: 'qwen2.5-coder:14b',
+          refactor: 'qwen2.5-coder:14b',
+          translate: 'qwen2.5-coder:14b',
+          reason: 'deepseek-r1:14b',
+          review: 'qwen2.5-coder:14b',
+          explain: 'llama3.1:8b',
+          docs: 'llama3.1:8b',
+          fast: 'llama3.1:8b',
+          complete: 'qwen2.5-coder:1.5b-base', // FIM
         },
       },
     },
   },
-  // ── 에이전트 역할 → 백엔드 매핑 (oh-my-openagent 식 오케스트레이터-워커 협업) ──
-  // 'claude'(=Bedrock, 에이전트 자신)·'codebase-memory-mcp'(=그래프 MCP) 는 CLI 가 호출하지 않는
-  // 가이드용 라벨. 나머지는 실제 CLI provider.
+  // ── 에이전트 역할 → 폴백 체인 (oh-my-openagent 의 fallbackChain 반영) ──
+  // 각 역할에 작업 "스타일"에 맞는 백엔드를 우선순위(싼/적합 → 폴백)로 나열한다. 런타임에
+  // 앞에서부터 "호출 가능(설정됨)·도달 가능"한 첫 백엔드를 쓰고, 실패하면 다음으로 자동 강등한다.
+  // 'claude'(=Bedrock, 에이전트 자신)·'codebase-memory-mcp'(=그래프 MCP)는 위임 대상이 아닌
+  // 종단 라벨(= "직접 처리"). chain 항목은 provider 이름(문자열) 또는 {provider, model}.
   roles: {
-    lead: { provider: 'claude', desc: '오케스트레이션·계획·위임·통합 (Bedrock, 외부)' },
-    explorer: { provider: 'codebase-memory-mcp', desc: '코드 탐색/검색/영향분석 (그래프, 무료)' },
-    coder: { provider: 'onprem-v100', desc: '보일러플레이트·테스트·리팩터·이식 (최저가 GPU)' },
-    oracle: { provider: 'onprem-h200', desc: '어려운 디버깅·알고리즘·대형 생성 (프런티어 오픈)' },
-    reviewer: { provider: 'claude', desc: '보안·최종 검토·의사결정 (Bedrock)' },
+    lead: { style: 'orchestration(mechanics)', chain: ['claude'], desc: '오케스트레이션·계획·위임·통합 (Bedrock)' },
+    explorer: { style: 'retrieval', chain: ['codebase-memory-mcp'], desc: '코드 탐색/검색/영향분석 (그래프, 무료)' },
+    coder: { style: 'bulk-code', chain: ['onprem-v100', 'ollama', 'onprem-h200'], desc: '대량·정형 생성 (V100→로컬→H200)' },
+    oracle: { style: 'deep-reasoning', chain: ['onprem-h200', 'onprem-v100', 'claude'], desc: '어려운 추론·대형 생성 (H200→V100→Bedrock)' },
+    reviewer: { style: 'judgment', chain: ['claude'], desc: '보안·최종 검토·의사결정 (Bedrock)' },
   },
   // 비용 최소화 에스컬레이션 사다리: 싼 것 → 비싼 것. 충분한 가장 싼 단계를 먼저 쓴다.
   escalation: ['codebase-memory-mcp', 'onprem-v100', 'onprem-h200', 'claude'],

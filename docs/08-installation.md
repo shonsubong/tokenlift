@@ -180,21 +180,28 @@ $env:OLLAMA_HOST="http://ollama.internal:11434"   # PowerShell
 
 ## 8.6c 온프렘 GPU 클러스터 (H200 oracle / V100 coder)
 
-사내 H200×8(oracle)·V100×8(coder)를 vLLM/SGLang/TGI/NIM 으로 OpenAI 호환 서빙한 뒤
-`providers.onprem-h200`·`providers.onprem-v100` 의 `host`·`routing` 모델명을 실제 배포로 교체.
+**H200×8 / V100×8 은 하드웨어**다. 그 위에서 **Ollama(여러 특화 모델)** 또는 **NemoClaw/NIM**
+을 서빙한다. 기본 설정은 `type:'ollama'` — 클러스터 Ollama 주소와 pull 한 태그로 교체.
 
 ```bash
-export ONPREM_API_KEY="..."                 # 게이트웨이 인증이 있으면(없으면 무인증)
+# (클러스터에서) 특화 모델 적재 예
+ssh h200  ollama pull qwen2.5-coder:32b && ollama pull deepseek-r1:70b
+ssh v100  ollama pull qwen2.5-coder:14b && ollama pull qwen2.5-coder:1.5b-base
+
+# (개인 config) providers.onprem-h200|onprem-v100 의 host 를 클러스터 주소로 교체
 tokenlift doctor   --provider onprem-v100   # 연결·모델 점검
-tokenlift models   --provider onprem-h200   # 서버 제공 모델 확인
-tokenlift roles                             # 역할→백엔드, 에스컬레이션 사다리
-tokenlift route "이 서비스 테스트 일괄 작성"   # 역할/티어 추천
-# 역할로 위임:
-tokenlift test -f src/a.ts -o src/a.test.ts --role coder    # = onprem-v100
-tokenlift gen  "동시성 큐 알고리즘 구현"        --role oracle   # = onprem-h200
+tokenlift models   --provider onprem-h200   # 보유 태그 확인
+tokenlift roles                             # 역할→폴백 체인, 에스컬레이션 사다리
+tokenlift route "이 서비스 테스트 일괄 작성"   # 역할/티어/폴백 추천
+
+# 역할로 위임(체인 자동 강등 포함):
+tokenlift test -f src/a.ts -o src/a.test.ts --role coder   # V100→(실패시)로컬→H200
+tokenlift gen  "동시성 큐 알고리즘 구현"        --role oracle  # H200→V100→(최후)Claude
 ```
-H200 은 FP8/대형 MoE(DeepSeek-R1, Qwen3-Coder-480B 등), V100 은 **FP16/INT4 전용**
-(Qwen2.5-Coder-32B 등). GPU 제약·모델 선택·비용 사다리는 [13. 멀티모델 에이전트](13-multi-model-agents.md).
+
+NemoClaw/NIM 으로 서빙한다면 해당 provider 를 `type:'openai-compat'` + `apiPath` +
+`apiKeyEnv: ONPREM_API_KEY` 로 바꾼다. GPU·모델 선택·폴백 체인·비용은
+[13. 멀티모델 에이전트](13-multi-model-agents.md).
 
 ## 8.7 설치 검증
 

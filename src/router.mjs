@@ -32,19 +32,42 @@ const HARD_SIGNALS = [
   '전체 모듈', '전반 리팩터', '대규모 리팩터', '멀티파일', '여러 파일에 걸친',
 ];
 
-// 'claude'(Bedrock=에이전트 자신), 'codebase-memory-mcp'(그래프 MCP) 는 CLI 위임 대상이 아님(라벨).
+// 'claude'(Bedrock=에이전트 자신), 'codebase-memory-mcp'(그래프 MCP) 는 CLI 위임 대상이 아님(종단 라벨).
 const NON_DELEGATABLE = new Set(['claude', 'codebase-memory-mcp']);
 
-/** 역할 이름 → {name, provider, model, desc, callable} (없으면 null) */
+/** provider 가 CLI 로 호출 가능한가(설정됨). 'ollama' 는 내장이라 항상 가능. */
+export function isCallableProvider(config, provider) {
+  if (NON_DELEGATABLE.has(provider)) return false;
+  return provider === 'ollama' || !!config.providers?.[provider];
+}
+
+/** 역할의 체인을 [{provider, model?}] 형태로 정규화 */
+function normalizeChain(role) {
+  const raw = Array.isArray(role.chain) ? role.chain : role.provider ? [role.provider] : [];
+  return raw.map((e) => (typeof e === 'string' ? { provider: e } : { provider: e.provider, model: e.model }));
+}
+
+/**
+ * 역할 이름 → 폴백 체인 해석(oh-my-openagent 식).
+ * @returns {{name, style, desc, chain, callableChain, primary, terminal}} | null
+ *  - chain: 전체 체인(라벨 포함)
+ *  - callableChain: CLI 로 실제 위임 가능한 항목만(순서 유지) — 런타임 자동 강등에 사용
+ *  - primary: 첫 호출가능 항목(없으면 null = Claude/그래프가 직접 처리)
+ *  - terminal: 체인 마지막(보통 claude — 최후 폴백)
+ */
 export function resolveRole(config, roleName) {
   const r = (config.roles || {})[roleName];
   if (!r) return null;
+  const chain = normalizeChain(r);
+  const callableChain = chain.filter((e) => isCallableProvider(config, e.provider));
   return {
     name: roleName,
-    provider: r.provider,
-    model: r.model || null,
+    style: r.style || '',
     desc: r.desc || '',
-    callable: !NON_DELEGATABLE.has(r.provider) && !!config.providers?.[r.provider],
+    chain,
+    callableChain,
+    primary: callableChain[0] || null,
+    terminal: chain.length ? chain[chain.length - 1].provider : null,
   };
 }
 
@@ -123,20 +146,24 @@ export function recommend(description, config, providerName) {
     const roleName = hard ? 'oracle' : roleForTask(best);
     const role = resolveRole(config, roleName);
     let profile;
+    let pinnedModel = null;
     if (providerName) {
       profile = getProviderProfile(config, providerName);
-    } else if (role && role.callable) {
-      profile = getProviderProfile(config, role.provider);
+    } else if (role && role.primary) {
+      profile = getProviderProfile(config, role.primary.provider);
+      pinnedModel = role.primary.model || null;
     } else {
       profile = getProviderProfile(config); // 기본 provider (보통 ollama)
     }
+    const fallbacks = role ? role.callableChain.slice(1).map((e) => e.provider) : [];
     return {
       route: 'local',
       role: roleName,
       provider: profile.name,
       task: best,
-      model: pickModel(best, profile, role?.model),
+      model: pickModel(best, profile, pinnedModel),
       tier: costTier(config, profile.name),
+      fallbacks,
       confidence: 'medium',
       reason: `대량/반복 코딩 신호 → '${best}' = '${roleName}' 역할로 '${profile.name}' 위임 권장(비용 최소)`,
     };

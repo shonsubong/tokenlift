@@ -12,9 +12,9 @@
    ├─ 코드 탐색/이해/검색/영향분석  ──graph──►  codebase-memory-mcp   ← 입력 토큰 ~99%↓ (로컬)
    │
    ├─ 대량/반복 코드 생성          ─tokenlift─►  온프렘 GPU            ← 출력 토큰↓ (한계비용≈전기)
-   │                                          ├─ V100×8  (coder, 대량·최저가)
-   │                                          ├─ H200×8  (oracle, 어려운/대형)
-   │                                          └─ ollama / nemoclaw(NIM)
+   │                                          │  (H200×8 / V100×8 위에서 Ollama·NemoClaw 서빙)
+   │                                          ├─ coder  = V100  (대량·최저가)
+   │                                          └─ oracle = H200  (어려운/대형) · 실패 시 체인 강등
    │
    └─ 고난도 판단(설계/보안/디버깅) ──────────►  Claude (Bedrock 전용)  ← 비싸지만 똑똑함
                                           (두 위임 결과의 검토·통합도 Claude)
@@ -117,8 +117,9 @@ bash scripts/install.sh
   (단일 바이너리, 로컬). 없으면 탐색 기둥은 자동 생략(평소대로 Read/Grep).
 - **생성 백엔드 하나 이상**:
   - **Ollama 0.6+** (로컬/사내) + 코드 모델 (예: `qwen2.5-coder:14b`, `devstral:24b`)
-  - 또는 **OpenAI 호환 온프렘 서버** — 사내 **H200×8(oracle)** / **V100×8(coder)** 클러스터를
-    vLLM/SGLang/TGI/NIM 으로 서빙(NVIDIA NemoClaw/NIM 포함). → [13. 멀티모델 에이전트](docs/13-multi-model-agents.md)
+  - **온프렘 GPU 클러스터** — 사내 **H200×8(oracle)** / **V100×8(coder)** 하드웨어 위에서
+    **Ollama(여러 특화 모델)** 또는 **NemoClaw/NIM** 서빙. 역할별 폴백 체인으로 자동 강등.
+    → [13. 멀티모델 에이전트](docs/13-multi-model-agents.md)
 - **외부 모델은 Claude=AWS Bedrock 전용** (오케스트레이션·판단·검토 담당)
 
 ## 한계 (정직한 고지)

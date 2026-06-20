@@ -84,17 +84,20 @@
 
 ## 백엔드(provider) & 에이전트 역할
 
-| provider | 대상 | 역할 | 모델명 예시 |
-|---|---|---|---|
-| `ollama` | 로컬 Ollama | (보조 coder) | `qwen2.5-coder:14b` |
-| `onprem-v100` | V100×8 (FP16) | **coder**(대량·최저가) | `Qwen/Qwen2.5-Coder-32B-Instruct` |
-| `onprem-h200` | H200×8 (FP8/MoE) | **oracle**(어려운/대형) | `deepseek-ai/DeepSeek-R1` |
-| `nemoclaw` | NIM (OpenAI 호환) | (온프렘 대안) | `qwen/qwen2.5-coder-32b-instruct` |
+> H200×8/V100×8 은 하드웨어. 그 위에서 **Ollama(특화 모델)** 또는 **NemoClaw** 서빙.
 
+| provider | 대상 | type | 역할 | 모델 태그 예시 |
+|---|---|---|---|---|
+| `ollama` | 로컬 Ollama | ollama | (보조 coder) | `qwen2.5-coder:14b` |
+| `onprem-v100` | V100×8 클러스터 Ollama | ollama | **coder**(대량·최저가) | `qwen2.5-coder:14b` |
+| `onprem-h200` | H200×8 클러스터 Ollama | ollama | **oracle**(어려운/대형) | `qwen2.5-coder:32b`, `deepseek-r1:70b` |
+| `nemoclaw` | NIM (OpenAI 호환) | openai-compat | (온프렘 대안) | `qwen/qwen2.5-coder-32b-instruct` |
+
+역할은 **폴백 체인**으로 동작(실패 시 자동 강등): coder=V100→로컬→H200, oracle=H200→V100→claude.
 ```bash
-tokenlift roles                          # 역할→백엔드 + 비용 에스컬레이션 사다리
-tokenlift route "<작업>"                  # 역할/티어 추천
-tokenlift test -f a.ts --role coder      # V100 로 대량 위임
+tokenlift roles                          # 역할→폴백 체인 + 비용 에스컬레이션 사다리
+tokenlift route "<작업>"                  # 역할/티어/폴백 추천
+tokenlift test -f a.ts --role coder      # V100(실패시 자동 강등)로 대량 위임
 tokenlift gen "알고리즘 구현" --role oracle # H200 로 어려운 작업 위임
 ```
 비용 사다리: 그래프(무료) → V100(coder) → H200(oracle) → Bedrock(claude).

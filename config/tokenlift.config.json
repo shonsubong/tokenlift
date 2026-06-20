@@ -34,57 +34,58 @@
       }
     },
     "onprem-h200": {
-      "type": "openai-compat",
-      "host": "http://h200.internal:8000",
-      "apiPath": "/v1",
-      "apiKeyEnv": "ONPREM_API_KEY",
-      "supportsFIM": false,
-      "models": [],
-      "_comment": "H200 x8 (FP8/대형 MoE). Oracle 역할: 어려운 추론·대형 생성. 모델명은 실제 배포로 교체.",
+      "type": "ollama",
+      "host": "http://h200.internal:11434",
+      "keepAlive": "30m",
+      "numCtx": 16384,
+      "_comment": "H200x8 하드웨어에 Ollama 서빙. Oracle 역할(어려운 추론·대형). NemoClaw/NIM 이면 type:openai-compat+apiKeyEnv 로 교체. 태그는 실제 pull 모델로.",
       "routing": {
-        "default": "deepseek-ai/DeepSeek-R1",
+        "default": "qwen2.5-coder:32b",
         "byTask": {
-          "reason": "deepseek-ai/DeepSeek-R1",
-          "agent": "Qwen/Qwen3-Coder-480B-A35B-Instruct",
-          "gen": "Qwen/Qwen3-Coder-480B-A35B-Instruct",
-          "refactor": "Qwen/Qwen3-Coder-480B-A35B-Instruct",
-          "test": "Qwen/Qwen3-Coder-480B-A35B-Instruct",
-          "translate": "Qwen/Qwen3-Coder-480B-A35B-Instruct",
-          "review": "deepseek-ai/DeepSeek-R1",
-          "explain": "Qwen/Qwen3-235B-A22B-Instruct",
-          "docs": "Qwen/Qwen3-235B-A22B-Instruct"
+          "reason": "deepseek-r1:70b",
+          "agent": "devstral:24b",
+          "gen": "qwen2.5-coder:32b",
+          "edit": "qwen2.5-coder:32b",
+          "test": "qwen2.5-coder:32b",
+          "refactor": "qwen2.5-coder:32b",
+          "translate": "qwen2.5-coder:32b",
+          "review": "deepseek-r1:70b",
+          "explain": "qwen2.5-coder:32b",
+          "docs": "llama3.3:70b",
+          "complete": "qwen2.5-coder:7b"
         }
       }
     },
     "onprem-v100": {
-      "type": "openai-compat",
-      "host": "http://v100.internal:8000",
-      "apiPath": "/v1",
-      "apiKeyEnv": "ONPREM_API_KEY",
-      "supportsFIM": false,
-      "models": [],
-      "_comment": "V100 x8 (FP16 전용, bf16/FP8 미지원 — FP16 또는 AWQ/GPTQ INT4). Coder 역할: 대량·최저가.",
+      "type": "ollama",
+      "host": "http://v100.internal:11434",
+      "keepAlive": "30m",
+      "numCtx": 8192,
+      "_comment": "V100x8 하드웨어에 Ollama 서빙(GGUF Q4/Q5 는 Volta 동작). Coder 역할(대량·최저가). 태그는 실제 pull 모델로.",
       "routing": {
-        "default": "Qwen/Qwen2.5-Coder-32B-Instruct",
+        "default": "qwen2.5-coder:14b",
         "byTask": {
-          "gen": "Qwen/Qwen2.5-Coder-32B-Instruct",
-          "edit": "Qwen/Qwen2.5-Coder-32B-Instruct",
-          "test": "Qwen/Qwen2.5-Coder-32B-Instruct",
-          "refactor": "Qwen/Qwen2.5-Coder-32B-Instruct",
-          "translate": "Qwen/Qwen2.5-Coder-32B-Instruct",
-          "docs": "meta-llama/Llama-3.1-8B-Instruct",
-          "explain": "meta-llama/Llama-3.1-8B-Instruct",
-          "fast": "meta-llama/Llama-3.1-8B-Instruct"
+          "gen": "qwen2.5-coder:14b",
+          "edit": "qwen2.5-coder:14b",
+          "test": "qwen2.5-coder:14b",
+          "refactor": "qwen2.5-coder:14b",
+          "translate": "qwen2.5-coder:14b",
+          "reason": "deepseek-r1:14b",
+          "review": "qwen2.5-coder:14b",
+          "explain": "llama3.1:8b",
+          "docs": "llama3.1:8b",
+          "fast": "llama3.1:8b",
+          "complete": "qwen2.5-coder:1.5b-base"
         }
       }
     }
   },
   "roles": {
-    "lead": { "provider": "claude", "desc": "오케스트레이션·계획·위임·통합 (Bedrock, 외부)" },
-    "explorer": { "provider": "codebase-memory-mcp", "desc": "코드 탐색/검색/영향분석 (그래프, 무료)" },
-    "coder": { "provider": "onprem-v100", "desc": "보일러플레이트·테스트·리팩터·이식 (최저가 GPU)" },
-    "oracle": { "provider": "onprem-h200", "desc": "어려운 디버깅·알고리즘·대형 생성 (프런티어 오픈)" },
-    "reviewer": { "provider": "claude", "desc": "보안·최종 검토·의사결정 (Bedrock)" }
+    "lead": { "style": "orchestration(mechanics)", "chain": ["claude"], "desc": "오케스트레이션·계획·위임·통합 (Bedrock)" },
+    "explorer": { "style": "retrieval", "chain": ["codebase-memory-mcp"], "desc": "코드 탐색/검색/영향분석 (그래프, 무료)" },
+    "coder": { "style": "bulk-code", "chain": ["onprem-v100", "ollama", "onprem-h200"], "desc": "대량·정형 생성 (V100→로컬→H200)" },
+    "oracle": { "style": "deep-reasoning", "chain": ["onprem-h200", "onprem-v100", "claude"], "desc": "어려운 추론·대형 생성 (H200→V100→Bedrock)" },
+    "reviewer": { "style": "judgment", "chain": ["claude"], "desc": "보안·최종 검토·의사결정 (Bedrock)" }
   },
   "escalation": ["codebase-memory-mcp", "onprem-v100", "onprem-h200", "claude"],
   "routing": {

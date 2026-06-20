@@ -97,28 +97,43 @@ const HELP = `tokenlift v${VERSION} — 로컬/온프렘 LLM 위임 브리지
       --no-log           사용량 로깅 비활성화
 `;
 
-// 활성 provider 프로파일/어댑터 구성 (--role, --provider, --host, --timeout 반영)
-function buildActiveProvider(config, flags) {
-  // --role 이 있으면 역할 → 비용최적 provider 로 해석(명시 --provider 가 우선)
-  let providerName = resolveProviderName(config, flags.provider);
+// --role/--provider/config 로부터 시도할 백엔드 체인 [{provider, model?}] 해석.
+// 역할이면 폴백 체인(호출가능 항목만), --provider 면 단일, 아니면 활성 provider.
+function resolveAttemptChain(config, flags) {
   if (flags.role && !flags.provider) {
     const role = resolveRole(config, flags.role);
     if (!role) {
       eprint(`알 수 없는 역할: '${flags.role}'. roles: ${Object.keys(config.roles || {}).join(', ')}`);
       process.exit(2);
     }
-    if (!role.callable) {
-      eprint(`역할 '${flags.role}' 은 '${role.provider}' 가 담당 — tokenlift 위임 대상이 아닙니다(Claude/그래프가 직접 처리).`);
+    if (role.callableChain.length === 0) {
+      const chain = role.chain.map((e) => e.provider).join(' → ');
+      eprint(`역할 '${flags.role}' 은 위임 가능한 백엔드가 없습니다(체인: ${chain}). → Claude/그래프가 직접 처리.`);
       process.exit(2);
     }
-    providerName = role.provider;
-    if (role.model && !flags.model) flags.model = role.model;
+    return role.callableChain.map((e) => ({ provider: e.provider, model: e.model || null }));
   }
-  const profile = getProviderProfile(config, providerName);
+  return [{ provider: resolveProviderName(config, flags.provider), model: null }];
+}
+
+// 단일 활성 provider 구성 (운영 명령 models/doctor/warmup 용)
+function buildActiveProvider(config, flags) {
+  const [first] = resolveAttemptChain(config, flags);
+  const profile = getProviderProfile(config, first.provider);
   if (flags.host) profile.host = flags.host;
+  if (first.model && !flags.model) flags.model = first.model;
   const timeoutMs = Number(flags.timeout) || profile.timeoutMs || config.ollama?.timeoutMs || 600000;
   const provider = createProvider(profile);
   return { provider, profile, timeoutMs };
+}
+
+function isConnError(err) {
+  return (
+    err?.code === 'ECONN' ||
+    err?.code === 'ETIMEOUT' ||
+    err?.code === 'EHTTP' ||
+    /연결할 수 없|타임아웃|ECONNREFUSED|fetch failed|연결: 실패/i.test(err?.message || '')
+  );
 }
 
 // ---------- 메인 ----------
@@ -148,7 +163,9 @@ async function main() {
   }
 
   // ---- 태스크 명령 처리 ----
-  const { provider, profile, timeoutMs } = buildActiveProvider(config, flags);
+  // 시도할 백엔드 체인(역할이면 폴백 체인). 앞에서부터 시도하고 연결 실패 시 다음으로 강등.
+  const attempts = resolveAttemptChain(config, flags);
+  const timeoutMs = Number(flags.timeout) || config.ollama?.timeoutMs || 600000;
 
   // 입력 텍스트: 위치인자 우선, 비었을 때만 stdin 을 읽는다.
   let instruction = flags._.join(' ').trim();
@@ -168,42 +185,64 @@ async function main() {
     files.push({ path: fp, content });
   }
 
-  // 생성 옵션
-  const options = {};
-  options.temperature = flags.temp != null ? Number(flags.temp) : config.generation?.temperature ?? 0.1;
-  if (flags['num-ctx']) options.num_ctx = Number(flags['num-ctx']);
-  else if (profile.numCtx) options.num_ctx = profile.numCtx;
+  if (cmd !== 'complete' && !instruction && files.length === 0) {
+    eprint(`입력이 비었습니다. 텍스트 인자나 -f 파일, 또는 파이프 입력이 필요합니다.`);
+    process.exit(2);
+  }
 
-  const model = pickModel(cmd, profile, flags.model);
+  // 체인을 순회하며 위임. 연결/타임아웃 실패면 다음 폴백으로 자동 강등.
+  let result, provider, profile, model;
+  for (let i = 0; i < attempts.length; i++) {
+    const a = attempts[i];
+    profile = getProviderProfile(config, a.provider);
+    if (flags.host) profile.host = flags.host;
+    provider = createProvider(profile);
+    model = flags.model || a.model || pickModel(cmd, profile);
 
-  let result;
-  if (cmd === 'complete') {
-    if (provider.supportsFIM === false) {
-      eprint(`주의: '${provider.name}' 는 FIM(complete)을 지원하지 않을 수 있습니다. 실패 시 gen/edit 사용을 권장합니다.`);
+    const options = {};
+    options.temperature = flags.temp != null ? Number(flags.temp) : config.generation?.temperature ?? 0.1;
+    if (flags['num-ctx']) options.num_ctx = Number(flags['num-ctx']);
+    else if (profile.numCtx) options.num_ctx = profile.numCtx;
+
+    try {
+      if (cmd === 'complete') {
+        if (provider.supportsFIM === false) {
+          eprint(`주의: '${provider.name}' 는 FIM(complete)을 지원하지 않을 수 있습니다. 실패 시 gen/edit 권장.`);
+        }
+        const built = buildTask('complete', {
+          prefix: flags.prefix ?? instruction,
+          suffix: flags.suffix ?? flags.to ?? '',
+        });
+        result = await provider.generate({ model, prompt: built.prompt, suffix: built.suffix, options, timeoutMs });
+      } else {
+        const built = buildTask(cmd, {
+          instruction, files,
+          lang: flags.lang || '', to: flags.to || '',
+          context: flags.context || '',
+        });
+        result = await provider.chat({
+          model,
+          messages: [
+            { role: 'system', content: built.system },
+            { role: 'user', content: built.user },
+          ],
+          options, timeoutMs,
+        });
+      }
+      break; // 성공
+    } catch (err) {
+      const more = i < attempts.length - 1;
+      if (isConnError(err) && more) {
+        eprint(`⚠️ '${a.provider}' 위임 실패(${(err.message || '').split('\n')[0]}) → 폴백 '${attempts[i + 1].provider}' 시도`);
+        continue;
+      }
+      if (isConnError(err)) {
+        eprint(`오류: 체인의 모든 백엔드 위임 실패. 마지막: ${err.message}`);
+        eprint(`→ 백엔드를 점검(tokenlift doctor --provider ${a.provider})하거나 Claude 가 직접 처리하세요.`);
+        process.exit(1);
+      }
+      throw err;
     }
-    const built = buildTask('complete', {
-      prefix: flags.prefix ?? instruction,
-      suffix: flags.suffix ?? flags.to ?? '',
-    });
-    result = await provider.generate({ model, prompt: built.prompt, suffix: built.suffix, options, timeoutMs });
-  } else {
-    if (!instruction && files.length === 0) {
-      eprint(`입력이 비었습니다. 텍스트 인자나 -f 파일, 또는 파이프 입력이 필요합니다.`);
-      process.exit(2);
-    }
-    const built = buildTask(cmd, {
-      instruction, files,
-      lang: flags.lang || '', to: flags.to || '',
-      context: flags.context || '',
-    });
-    result = await provider.chat({
-      model,
-      messages: [
-        { role: 'system', content: built.system },
-        { role: 'user', content: built.user },
-      ],
-      options, timeoutMs,
-    });
   }
 
   // 결과물 가공: 코드 태스크는 코드펜스 추출, 그 외는 think 제거
@@ -245,17 +284,25 @@ async function main() {
 
 // ---------- 서브명령 구현 ----------
 function cmdRoles(config) {
-  console.log('# 에이전트 역할 → 백엔드 (oh-my-openagent 식 오케스트레이터-워커)');
-  for (const [name, r] of Object.entries(config.roles || {})) {
+  console.log('# 에이전트 역할 → 폴백 체인 (oh-my-openagent fallbackChain 반영)');
+  console.log('  체인은 앞에서부터 호출가능·도달가능한 첫 백엔드를 쓰고, 실패하면 다음으로 자동 강등.\n');
+  for (const [name] of Object.entries(config.roles || {})) {
     const role = resolveRole(config, name);
-    const tag = role.callable ? 'CLI 위임' : (r.provider === 'claude' ? 'Bedrock(직접)' : '그래프(MCP)');
-    console.log(`  ${name.padEnd(9)} → ${String(r.provider).padEnd(18)} [${tag}]`);
-    if (r.desc) console.log(`  ${' '.repeat(9)}   ${r.desc}`);
+    const chainStr = role.chain
+      .map((e) => {
+        const callable = role.callableChain.includes(e);
+        return callable ? `[${e.provider}]` : e.provider; // [..]=CLI 위임 가능
+      })
+      .join(' → ');
+    const now = role.primary ? role.primary.provider : '(직접: ' + role.terminal + ')';
+    console.log(`  ${name.padEnd(9)} (${role.style})`);
+    console.log(`  ${' '.repeat(9)} 체인: ${chainStr}`);
+    console.log(`  ${' '.repeat(9)} 현재 해석: ${now}   ${role.desc}`);
   }
   console.log('\n# 비용 최소화 에스컬레이션 사다리 (싼 → 비싼)');
   const ladder = config.escalation || [];
   console.log('  ' + ladder.map((p, i) => `${i + 1}.${p}`).join('  →  '));
-  console.log('\n사용: tokenlift <task> --role coder|oracle   (역할로 백엔드 자동 선택)');
+  console.log('\n[..] = CLI 위임 가능 백엔드. 사용: tokenlift <task> --role coder|oracle');
 }
 
 function cmdProviders(config, flags) {
@@ -358,6 +405,7 @@ async function cmdRoute(config, flags) {
   if (rec.provider) console.log(`권장 백엔드: ${rec.provider}`);
   if (rec.model) console.log(`권장 모델: ${rec.model}`);
   if (rec.tier) console.log(`비용 티어: ${rec.tier.tier}/${rec.tier.of} (1=가장 쌈)`);
+  if (rec.fallbacks && rec.fallbacks.length) console.log(`폴백 체인: ${rec.fallbacks.join(' → ')}`);
   console.log(`신뢰도: ${rec.confidence}`);
   console.log(`근거: ${rec.reason}`);
   if (rec.route === 'local' && rec.task) {
