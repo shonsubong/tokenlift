@@ -5,21 +5,26 @@
 | 항목 | 버전 | 확인 | 용도 |
 |---|---|---|---|
 | Node.js | 18+ | `node --version` | CLI 런타임 |
-| Ollama | 0.6+ | `ollama --version` | 생성 위임(로컬) |
-| 코드 모델 | 1개+ | `ollama list` | 생성 모델 |
+| 사내 Ollama 서버 | 0.6+ | `curl http://<서버>:11434/api/tags` | 생성 위임(H200/V100) |
+| 코드 모델 | 다수 | `tokenlift models --provider onprem-v100` | 생성 모델(최신 오픈) |
 | codebase-memory-mcp | 최신 | 도구 가용성 | **탐색 위임(그래프)·권장** |
 
-### Ollama 준비 (생성 위임)
-```bash
-# 서버 실행(데스크톱 앱이면 자동 실행됨)
-ollama serve
+### Ollama 준비 (생성 위임) — 사내 H200/V100 서버
 
-# 주력 코드 모델 설치(최소 1개)
-ollama pull qwen2.5-coder:14b
-# 선택: 추가 모델
-ollama pull devstral:24b
-ollama pull deepcoder
+> Ollama 는 **사내 H200/V100 서버**에서 구동되며 최신 오픈 모델이 다수 pull 되어 있다고
+> 가정한다(로컬 PC 에 설치할 필요 없음). 서버 운영자가 모델을 적재한다.
+
+```bash
+# (서버 운영자) 각 서버에 특화 모델 pull (예시)
+ssh h200   ollama pull qwen2.5-coder:32b && ollama pull deepseek-r1:70b && ollama pull devstral:24b
+ssh v100   ollama pull qwen2.5-coder:14b && ollama pull qwen2.5-coder:1.5b-base && ollama pull qwen3:8b
+
+# (사용자) config 의 onprem-h200 / onprem-v100 host 를 사내 서버 주소로 설정
+#   ~/.tokenlift/config.json → providers.onprem-v100.host = "http://v100.internal:11434" 등
 ```
+
+> (선택) 로컬 PC 에 Ollama 가 있다면 개발용으로 `--provider ollama` 사용 가능하나, 기본 위임은
+> 사내 서버(onprem-v100/h200)다.
 
 ### codebase-memory-mcp 준비 (탐색 위임 · 권장)
 

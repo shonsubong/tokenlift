@@ -5,9 +5,12 @@
 ## 9.1 연결 / 실행
 
 ### "Ollama 서버에 연결할 수 없습니다"
-- Ollama 가 실행 중인지 확인: `ollama serve` (데스크톱 앱이면 트레이 아이콘 확인).
-- 호스트 확인: 기본 `http://localhost:11434`. 원격이면 `OLLAMA_HOST`/`--host` 설정.
-- 방화벽/포트: `curl http://localhost:11434/api/tags` 가 응답하는지 확인.
+- Ollama 는 **사내 H200/V100 서버**에서 구동된다(로컬 PC 아님). 서버가 떠 있는지 확인.
+- 호스트 확인: `config.providers.onprem-h200|onprem-v100.host` 가 사내 주소인지. 일회성은 `--host`.
+- 방화벽/포트: `curl http://<사내서버>:11434/api/tags` 가 응답하는지 확인.
+- 한 서버가 다운이면 역할 체인이 자동 강등한다(예: `--role oracle` 은 H200→V100→Claude).
+  모든 백엔드 불가 시 Claude 가 직접 처리한다.
+- (로컬 개발용 Ollama 를 쓸 때만) `ollama serve` + `--provider ollama`.
 
 ### 첫 호출이 매우 느림 (수십 초)
 - **정상이다.** 9~14GB 모델의 콜드 로드(메모리 적재) 때문이다.

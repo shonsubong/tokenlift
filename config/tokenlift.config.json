@@ -1,6 +1,7 @@
 {
   "$schema": "./tokenlift.config.schema.json",
-  "provider": "ollama",
+  "provider": "onprem-v100",
+  "_provider_note": "Ollama 는 사내 H200/V100 서버에서 구동(로컬 PC 아님). 기본 위임=최저가 onprem-v100. 로컬 ollama 는 선택(개발용).",
   "ollama": {
     "host": "http://localhost:11434",
     "timeoutMs": 600000,
@@ -38,7 +39,7 @@
       "host": "http://h200.internal:11434",
       "keepAlive": "30m",
       "numCtx": 16384,
-      "_comment": "H200x8 하드웨어에 Ollama 서빙. Oracle 역할(어려운 추론·대형). NemoClaw/NIM 이면 type:openai-compat+apiKeyEnv 로 교체. 태그는 실제 pull 모델로.",
+      "_comment": "사내 H200 Ollama 서버(최신 오픈 모델 다수). Oracle 역할(어려운 추론·대형). NemoClaw/NIM 이면 type:openai-compat+apiKeyEnv 로 교체. 태그는 실제 pull 모델로.",
       "routing": {
         "default": "qwen2.5-coder:32b",
         "byTask": {
@@ -47,10 +48,10 @@
           "gen": "qwen2.5-coder:32b",
           "edit": "qwen2.5-coder:32b",
           "test": "qwen2.5-coder:32b",
-          "refactor": "qwen2.5-coder:32b",
+          "refactor": "qwen3:32b",
           "translate": "qwen2.5-coder:32b",
           "review": "deepseek-r1:70b",
-          "explain": "qwen2.5-coder:32b",
+          "explain": "qwen3:32b",
           "docs": "llama3.3:70b",
           "complete": "qwen2.5-coder:7b"
         }
@@ -61,7 +62,7 @@
       "host": "http://v100.internal:11434",
       "keepAlive": "30m",
       "numCtx": 8192,
-      "_comment": "V100x8 하드웨어에 Ollama 서빙(GGUF Q4/Q5 는 Volta 동작). Coder 역할(대량·최저가). 태그는 실제 pull 모델로.",
+      "_comment": "사내 V100 Ollama 서버(GGUF Q4/Q5 는 Volta 동작). Coder 역할(대량·최저가). 태그는 실제 pull 모델로.",
       "routing": {
         "default": "qwen2.5-coder:14b",
         "byTask": {
@@ -72,9 +73,9 @@
           "translate": "qwen2.5-coder:14b",
           "reason": "deepseek-r1:14b",
           "review": "qwen2.5-coder:14b",
-          "explain": "llama3.1:8b",
+          "explain": "qwen3:8b",
           "docs": "llama3.1:8b",
-          "fast": "llama3.1:8b",
+          "fast": "gemma3:12b",
           "complete": "qwen2.5-coder:1.5b-base"
         }
       }
@@ -83,7 +84,7 @@
   "roles": {
     "lead": { "style": "orchestration(mechanics)", "chain": ["claude"], "desc": "오케스트레이션·계획·위임·통합 (Bedrock)" },
     "explorer": { "style": "retrieval", "chain": ["codebase-memory-mcp"], "desc": "코드 탐색/검색/영향분석 (그래프, 무료)" },
-    "coder": { "style": "bulk-code", "chain": ["onprem-v100", "ollama", "onprem-h200"], "desc": "대량·정형 생성 (V100→로컬→H200)" },
+    "coder": { "style": "bulk-code", "chain": ["onprem-v100", "onprem-h200"], "desc": "대량·정형 생성 (V100→H200)" },
     "oracle": { "style": "deep-reasoning", "chain": ["onprem-h200", "onprem-v100", "claude"], "desc": "어려운 추론·대형 생성 (H200→V100→Bedrock)" },
     "reviewer": { "style": "judgment", "chain": ["claude"], "desc": "보안·최종 검토·의사결정 (Bedrock)" }
   },

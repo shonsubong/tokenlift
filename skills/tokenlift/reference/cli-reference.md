@@ -1,6 +1,6 @@
 # TokenLift CLI 전체 참조
 
-`tokenlift` 는 로컬 Ollama 에 코딩 작업을 위임하는 무의존성 Node CLI 다.
+`tokenlift` 는 사내 온프렘 Ollama 서버(H200/V100) 또는 NemoClaw 에 코딩 작업을 위임하는 무의존성 Node CLI 다.
 
 ## 설치 / 호출 방법
 

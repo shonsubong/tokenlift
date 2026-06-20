@@ -2,7 +2,7 @@
 
 ## 7.1 절감 추정 방식
 
-TokenLift는 **로컬 Ollama 가 처리한 토큰을, 만약 Bedrock(Claude)이 처리했다면 들었을 비용**
+TokenLift는 **사내 온프렘 Ollama 서버가 처리한 토큰을, 만약 Bedrock(Claude)이 처리했다면 들었을 비용**
 으로 환산해 절감액을 추정한다.
 
 ```

@@ -62,7 +62,7 @@ Bedrock(Claude) 과금 구조에서 **출력 토큰 단가가 입력보다 약 5
 
 ```
 [기존]  Claude 가 5,000줄 로그 전체를 읽음  →  비싼 입력 토큰 5,000줄분
-[TokenLift]  Ollama 가 로컬에서 읽고 10줄 요약  →  Claude 는 요약만 받음
+[TokenLift]  사내 Ollama 서버가 읽고 10줄 요약  →  Claude 는 요약만 받음
             ⇒ 입력 토큰을 1/500 수준으로
 ```
 

@@ -106,12 +106,12 @@ tokenlift stats
 
 ## 11.6 하이브리드 운영 (Ollama + NemoClaw)
 
-태스크별로 백엔드를 나눠 쓸 수 있다. 예: 가벼운 작업은 로컬 Ollama, 무거운/대형 모델이
-필요한 작업은 사내 NIM.
+태스크별로 백엔드를 나눠 쓸 수 있다. 예: 가벼운 작업은 사내 V100 서버, 무거운/대형 모델이
+필요한 작업은 H200 서버(또는 NIM).
 
 ```bash
-# 빠른 보일러플레이트는 로컬 Ollama
-tokenlift gen "DTO 클래스" --provider ollama -m qwen2.5-coder:14b
+# 빠른 보일러플레이트는 V100 서버(coder)
+tokenlift gen "DTO 클래스" --role coder
 
 # 대형 모델이 유리한 복잡 생성은 사내 NIM
 tokenlift gen "도메인 서비스 구현체 일괄" --provider nemoclaw -m nvidia/llama-3.1-nemotron-70b-instruct

@@ -143,8 +143,9 @@ tokenlift explain -f huge_module.ts "핵심 데이터 흐름만"
 # 라우팅 추천 (위임할지/모델 무엇)
 tokenlift route "결제 모듈 단위테스트 작성"
 
-# 백엔드 선택 (로컬 Ollama 기본 / 온프렘 NemoClaw·NIM)
-tokenlift gen "..." --provider nemoclaw   # OpenAI 호환 온프렘으로 위임
+# 백엔드 선택 (사내 Ollama 서버 기본: --role coder=V100 / oracle=H200)
+tokenlift gen "..." --role oracle          # 사내 H200 서버로 위임(실패 시 체인 강등)
+tokenlift gen "..." --provider nemoclaw   # NemoClaw/NIM(OpenAI 호환)로 위임
 tokenlift providers  # 설정된 백엔드 목록/활성 확인
 
 # 운영
@@ -174,6 +175,6 @@ OpenAI 호환)로 위임하려면 `--provider nemoclaw`. 어느 백엔드든 std
 
 - 같은 모델을 연속 사용하면 빠르다(모델 교체 시 재적재 비용 발생). 한 세션에선 가능한
   하나의 코드 모델(`qwen2.5-coder:14b`)로 묶어 위임한다.
-- 백엔드가 꺼져 있으면 `tokenlift doctor` 가 알려준다. 그 경우 Claude가 직접 처리하거나
-  사용자에게 백엔드 기동(`ollama serve` 또는 사내 NIM 확인)을 요청한다.
+- 백엔드(사내 Ollama 서버)가 꺼져 있으면 `tokenlift doctor` 가 알려준다. 역할 체인이 자동
+  강등되며, 모두 불가면 Claude가 직접 처리하거나 사용자에게 사내 서버 점검을 요청한다.
 - 가벼운 작업은 로컬 `ollama`, 대형 모델이 필요한 작업은 사내 `nemoclaw` 로 나눠 위임할 수 있다.

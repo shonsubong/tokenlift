@@ -9,11 +9,13 @@ const PKG_CONFIG = path.join(__dirname, '..', 'config', 'tokenlift.config.json')
 const USER_CONFIG = expandHome('~/.tokenlift/config.json');
 
 const DEFAULTS = {
-  // 활성 백엔드(기본 ollama). 'nemoclaw' 등으로 바꾸거나 --provider 로 일회성 지정.
-  provider: 'ollama',
-  // 기본(ollama) 백엔드 설정 — 하위호환을 위해 최상위에 유지.
+  // 활성 백엔드. Ollama 는 사내 H200/V100 서버에서 구동된다(로컬 PC 아님).
+  // 기본 위임 대상은 최저가 사내 서버(onprem-v100). --provider/--role 로 일회성 변경.
+  provider: 'onprem-v100',
+  // (선택) 로컬 개발용 Ollama. 사내 기본 백엔드는 providers.onprem-v100 / onprem-h200 이다.
+  // 로컬에 Ollama 가 없으면 이 provider 는 쓰지 않는다(기본 체인에서 제외됨).
   ollama: { host: 'http://localhost:11434', timeoutMs: 600000, keepAlive: '30m', numCtx: 8192 },
-  // 추가 온프렘/원격 백엔드. 'ollama' 외 provider 는 여기에 정의한다.
+  // 사내 온프렘 백엔드. 'ollama'(로컬) 외 provider 는 여기에 정의한다.
   providers: {
     // NVIDIA NemoClaw / NIM (OpenAI 호환). 사내 엔드포인트/모델명/키로 교체할 것.
     nemoclaw: {
@@ -41,19 +43,19 @@ const DEFAULTS = {
         },
       },
     },
-    // ── 온프렘 GPU 클러스터 ──
-    // H200×8 / V100×8 은 "하드웨어"다. 그 위에서 Ollama(다양한 특화 모델) 또는 NemoClaw/NIM 을
-    // 서빙한다. 기본은 type:'ollama'(여러 특화 모델을 task별로 매핑, FIM·keep_alive·warmup 네이티브).
-    // NemoClaw/NIM/vLLM 로 서빙한다면 type:'openai-compat' + apiPath + apiKeyEnv 로 교체.
+    // ── 사내 온프렘 Ollama 서버 (로컬 PC 아님) ──
+    // H200×8 / V100×8 서버에 Ollama 가 떠 있고 최신 오픈 모델이 다수 pull 되어 있다고 가정.
+    // 기본은 type:'ollama'(여러 특화 모델을 task별 매핑, FIM·keep_alive·warmup 네이티브).
+    // 같은 서버를 NemoClaw/NIM/vLLM 로 서빙한다면 type:'openai-compat' + apiPath + apiKeyEnv 로 교체.
     //
-    // H200×8 (≈1.1TB HBM3e, 고속/대형): Oracle 역할 — 어려운 추론·대형 생성. 큰 특화 모델 적재.
+    // H200 서버 (고속/대용량): Oracle 역할 — 어려운 추론·대형 생성. 큰 최신 오픈 모델 적재.
     'onprem-h200': {
       type: 'ollama',
-      host: 'http://h200.internal:11434', // 사내 H200 Ollama 엔드포인트로 교체
+      host: 'http://h200.internal:11434', // 사내 H200 Ollama 주소로 교체
       keepAlive: '30m',
       numCtx: 16384,
       routing: {
-        // Ollama 태그 예시 — 클러스터에 pull 된 실제 특화 모델로 교체.
+        // 최신 오픈 모델 Ollama 태그 예시 — 서버에 pull 된 실제 태그로 교체.
         default: 'qwen2.5-coder:32b',
         byTask: {
           reason: 'deepseek-r1:70b', // 추론 특화
@@ -61,23 +63,23 @@ const DEFAULTS = {
           gen: 'qwen2.5-coder:32b',
           edit: 'qwen2.5-coder:32b',
           test: 'qwen2.5-coder:32b',
-          refactor: 'qwen2.5-coder:32b',
+          refactor: 'qwen3:32b',
           translate: 'qwen2.5-coder:32b',
           review: 'deepseek-r1:70b',
-          explain: 'qwen2.5-coder:32b',
+          explain: 'qwen3:32b',
           docs: 'llama3.3:70b',
           complete: 'qwen2.5-coder:7b', // FIM
         },
       },
     },
-    // V100×8 (≈256GB@32GB, 구형): Coder 역할 — 대량·정형 생성(최저가). 중소/양자화(GGUF) 특화 모델.
+    // V100 서버 (대량 처리): Coder 역할 — 대량·정형 생성(최저가). 중소·양자화(GGUF) 최신 모델.
     'onprem-v100': {
       type: 'ollama',
-      host: 'http://v100.internal:11434', // 사내 V100 Ollama 엔드포인트로 교체
+      host: 'http://v100.internal:11434', // 사내 V100 Ollama 주소로 교체
       keepAlive: '30m',
       numCtx: 8192,
       routing: {
-        // Ollama GGUF(Q4/Q5)는 Volta(V100)에서도 동작. 중소 특화 모델 위주.
+        // GGUF(Q4/Q5) 양자화는 Volta(V100)에서도 동작. 중소 최신 특화 모델 위주.
         default: 'qwen2.5-coder:14b',
         byTask: {
           gen: 'qwen2.5-coder:14b',
@@ -87,9 +89,9 @@ const DEFAULTS = {
           translate: 'qwen2.5-coder:14b',
           reason: 'deepseek-r1:14b',
           review: 'qwen2.5-coder:14b',
-          explain: 'llama3.1:8b',
+          explain: 'qwen3:8b',
           docs: 'llama3.1:8b',
-          fast: 'llama3.1:8b',
+          fast: 'gemma3:12b',
           complete: 'qwen2.5-coder:1.5b-base', // FIM
         },
       },
@@ -103,7 +105,7 @@ const DEFAULTS = {
   roles: {
     lead: { style: 'orchestration(mechanics)', chain: ['claude'], desc: '오케스트레이션·계획·위임·통합 (Bedrock)' },
     explorer: { style: 'retrieval', chain: ['codebase-memory-mcp'], desc: '코드 탐색/검색/영향분석 (그래프, 무료)' },
-    coder: { style: 'bulk-code', chain: ['onprem-v100', 'ollama', 'onprem-h200'], desc: '대량·정형 생성 (V100→로컬→H200)' },
+    coder: { style: 'bulk-code', chain: ['onprem-v100', 'onprem-h200'], desc: '대량·정형 생성 (V100→H200)' },
     oracle: { style: 'deep-reasoning', chain: ['onprem-h200', 'onprem-v100', 'claude'], desc: '어려운 추론·대형 생성 (H200→V100→Bedrock)' },
     reviewer: { style: 'judgment', chain: ['claude'], desc: '보안·최종 검토·의사결정 (Bedrock)' },
   },
