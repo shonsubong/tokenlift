@@ -57,6 +57,31 @@
         }
       }
     },
+    "onprem-glm": {
+      "type": "openai-compat",
+      "host": "http://h200.internal:8080",
+      "apiPath": "/v1",
+      "apiKeyEnv": "ONPREM_API_KEY",
+      "supportsFIM": false,
+      "models": ["glm-5.2"],
+      "sampling": { "temperature": 1.0, "top_p": 0.95, "top_k": 40, "min_p": 0.0 },
+      "_comment": "GLM-5.2(744B MoE) — Ollama 미지원이라 llama.cpp(llama-server)로 GGUF 양자화 서빙(OpenAI 호환). H200 클러스터에서 scripts/run-glm-llamacpp.sh 로 구동. Oracle 1순위(프런티어). 모델 id 는 llama-server --alias 와 일치시킬 것. extraBody 로 비표준 필드 추가 가능(예: chat_template_kwargs).",
+      "routing": {
+        "default": "glm-5.2",
+        "byTask": {
+          "reason": "glm-5.2",
+          "agent": "glm-5.2",
+          "review": "glm-5.2",
+          "gen": "glm-5.2",
+          "edit": "glm-5.2",
+          "test": "glm-5.2",
+          "refactor": "glm-5.2",
+          "translate": "glm-5.2",
+          "explain": "glm-5.2",
+          "docs": "glm-5.2"
+        }
+      }
+    },
     "onprem-v100": {
       "type": "ollama",
       "host": "http://v100.internal:11434",
@@ -85,10 +110,10 @@
     "lead": { "style": "orchestration(mechanics)", "chain": ["claude"], "desc": "오케스트레이션·계획·위임·통합 (Bedrock)" },
     "explorer": { "style": "retrieval", "chain": ["codebase-memory-mcp"], "desc": "코드 탐색/검색/영향분석 (그래프, 무료)" },
     "coder": { "style": "bulk-code", "chain": ["onprem-v100", "onprem-h200"], "desc": "대량·정형 생성 (V100→H200)" },
-    "oracle": { "style": "deep-reasoning", "chain": ["onprem-h200", "onprem-v100", "claude"], "desc": "어려운 추론·대형 생성 (H200→V100→Bedrock)" },
+    "oracle": { "style": "deep-reasoning", "chain": ["onprem-glm", "onprem-h200", "onprem-v100", "claude"], "desc": "어려운 추론·대형 생성 (GLM-5.2→H200→V100→Bedrock)" },
     "reviewer": { "style": "judgment", "chain": ["claude"], "desc": "보안·최종 검토·의사결정 (Bedrock)" }
   },
-  "escalation": ["codebase-memory-mcp", "onprem-v100", "onprem-h200", "claude"],
+  "escalation": ["codebase-memory-mcp", "onprem-v100", "onprem-h200", "onprem-glm", "claude"],
   "routing": {
     "default": "qwen2.5-coder:14b",
     "byTask": {

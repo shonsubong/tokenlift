@@ -72,6 +72,30 @@ const DEFAULTS = {
         },
       },
     },
+    // ── GLM-5.2 (frontier 오픈 모델, 744B MoE / 40B 활성) ──
+    // Ollama 로는 부적합 → llama.cpp(llama-server)로 GGUF 동적 양자화 서빙(OpenAI 호환 /v1).
+    // H200 클러스터에서 scripts/run-glm-llamacpp.sh 로 구동. Oracle 역할의 1순위(프런티어).
+    // 권장 샘플링(temp 1.0/top_p 0.95/top_k 40)은 provider.sampling 으로 중앙 관리한다.
+    // 추론(thinking) on/off 는 호출별 --think 또는 구동 시 reasoning-budget 으로 제어.
+    'onprem-glm': {
+      type: 'openai-compat',
+      host: 'http://h200.internal:8080', // llama-server 주소(기본 포트 8080)로 교체
+      apiPath: '/v1',
+      apiKeyEnv: 'ONPREM_API_KEY', // 게이트웨이 인증 시에만(에어갭 로컬이면 무인증)
+      supportsFIM: false, // GLM 은 FIM(complete) 대상 아님 → gen/edit 사용
+      models: ['glm-5.2'], // llama-server --alias 로 맞춘 모델 id (/v1/models 미노출 대비 수동 목록)
+      sampling: { temperature: 1.0, top_p: 0.95, top_k: 40, min_p: 0.0 },
+      // 비표준 요청 필드가 필요하면 여기에. 예: { "chat_template_kwargs": { "enable_thinking": false } }
+      // extraBody: {},
+      routing: {
+        default: 'glm-5.2',
+        byTask: {
+          reason: 'glm-5.2', agent: 'glm-5.2', review: 'glm-5.2',
+          gen: 'glm-5.2', edit: 'glm-5.2', test: 'glm-5.2',
+          refactor: 'glm-5.2', translate: 'glm-5.2', explain: 'glm-5.2', docs: 'glm-5.2',
+        },
+      },
+    },
     // V100 서버 (대량 처리): Coder 역할 — 대량·정형 생성(최저가). 중소·양자화(GGUF) 최신 모델.
     'onprem-v100': {
       type: 'ollama',
@@ -106,11 +130,12 @@ const DEFAULTS = {
     lead: { style: 'orchestration(mechanics)', chain: ['claude'], desc: '오케스트레이션·계획·위임·통합 (Bedrock)' },
     explorer: { style: 'retrieval', chain: ['codebase-memory-mcp'], desc: '코드 탐색/검색/영향분석 (그래프, 무료)' },
     coder: { style: 'bulk-code', chain: ['onprem-v100', 'onprem-h200'], desc: '대량·정형 생성 (V100→H200)' },
-    oracle: { style: 'deep-reasoning', chain: ['onprem-h200', 'onprem-v100', 'claude'], desc: '어려운 추론·대형 생성 (H200→V100→Bedrock)' },
+    oracle: { style: 'deep-reasoning', chain: ['onprem-glm', 'onprem-h200', 'onprem-v100', 'claude'], desc: '어려운 추론·대형 생성 (GLM-5.2→H200→V100→Bedrock)' },
     reviewer: { style: 'judgment', chain: ['claude'], desc: '보안·최종 검토·의사결정 (Bedrock)' },
   },
   // 비용 최소화 에스컬레이션 사다리: 싼 것 → 비싼 것. 충분한 가장 싼 단계를 먼저 쓴다.
-  escalation: ['codebase-memory-mcp', 'onprem-v100', 'onprem-h200', 'claude'],
+  // onprem-glm(GLM-5.2)은 가장 강력하지만 가장 무거운 온프렘 단계 → Bedrock 직전.
+  escalation: ['codebase-memory-mcp', 'onprem-v100', 'onprem-h200', 'onprem-glm', 'claude'],
   routing: {
     default: 'qwen2.5-coder:14b',
     byTask: {

@@ -24,6 +24,7 @@
 비용 최소화 사다리 `그래프(무료) → V100(coder) → H200(oracle) → Bedrock(claude)` 에서 충분한
 가장 싼 단계를 쓴다. `tokenlift roles` / `tokenlift route "<작업>"` 로 확인.
 
+- GLM-5.2 를 llama.cpp 로 온프렘 서빙(프런티어 오픈 모델) → [14. GLM-5.2 × llama.cpp](docs/14-glm-llamacpp.md)
 - 멀티모델 에이전트 라우팅 → [13. 멀티모델 에이전트](docs/13-multi-model-agents.md)
 - 탐색 그래프 → [12. 코드 탐색 위임](docs/12-codebase-memory.md)
 - 생성 백엔드(provider 추상화, `--provider`/`--role`) → [11. 백엔드 확장](docs/11-providers.md)
@@ -107,6 +108,7 @@ bash scripts/install.sh
 | 11 | [백엔드 확장](docs/11-providers.md) | Ollama / NemoClaw(NIM) provider 설정 |
 | 12 | [코드 탐색 위임](docs/12-codebase-memory.md) | codebase-memory-mcp 지식 그래프(기본) |
 | 13 | [멀티모델 에이전트](docs/13-multi-model-agents.md) | 역할·에스컬레이션·온프렘 H200/V100 |
+| 14 | [GLM-5.2 × llama.cpp](docs/14-glm-llamacpp.md) | GLM-5.2 양자화 모델 llama-server 서빙 + onprem-glm 연동 |
 
 ## 요구사항
 

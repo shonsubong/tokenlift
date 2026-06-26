@@ -76,7 +76,11 @@
 | `--prefix`, `--suffix` | (complete) FIM 접두/접미 |
 | `--host <url>` | 백엔드 호스트 override |
 | `--timeout <ms>` | 요청 타임아웃(기본 600000) |
-| `--temp <n>` | temperature (기본 0.1) |
+| `--temp <n>` | temperature (미지정 시 provider 권장값 또는 0.1) |
+| `--top-p <n>` | top-p(nucleus) 샘플링 |
+| `--top-k <n>` | top-k 샘플링 |
+| `--min-p <n>` | min-p 샘플링 |
+| `--think <on\|off>` | 추론(thinking) 토글 — GLM/llama.cpp(openai-compat) 전용 |
 | `--num-ctx <n>` | 컨텍스트 윈도우 토큰 수(ollama) |
 | `--json` | 기계 판독용 JSON 출력 |
 | `-q, --quiet` | stderr 메타 출력 억제 |
@@ -91,9 +95,11 @@
 | `ollama` | 로컬 Ollama | ollama | (보조 coder) | `qwen2.5-coder:14b` |
 | `onprem-v100` | V100×8 클러스터 Ollama | ollama | **coder**(대량·최저가) | `qwen2.5-coder:14b` |
 | `onprem-h200` | H200×8 클러스터 Ollama | ollama | **oracle**(어려운/대형) | `qwen2.5-coder:32b`, `deepseek-r1:70b` |
+| `onprem-glm` | GLM-5.2 @ llama.cpp(`llama-server`) | openai-compat | **oracle 1순위**(프런티어) | `glm-5.2` |
 | `nemoclaw` | NIM (OpenAI 호환) | openai-compat | (온프렘 대안) | `qwen/qwen2.5-coder-32b-instruct` |
 
-역할은 **폴백 체인**으로 동작(실패 시 자동 강등): coder=V100→로컬→H200, oracle=H200→V100→claude.
+역할은 **폴백 체인**으로 동작(실패 시 자동 강등): coder=V100→로컬→H200, oracle=GLM-5.2→H200→V100→claude.
+GLM-5.2(llama.cpp) 서빙·연동은 `docs/14-glm-llamacpp.md` 참조.
 ```bash
 tokenlift roles                          # 역할→폴백 체인 + 비용 에스컬레이션 사다리
 tokenlift route "<작업>"                  # 역할/티어/폴백 추천

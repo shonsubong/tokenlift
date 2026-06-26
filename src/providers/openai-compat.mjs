@@ -76,17 +76,54 @@ async function postJson(profile, url, body, timeoutMs) {
 
 export function createOpenAICompatProvider(profile) {
   const base = String(profile.host || '').replace(/\/$/, '') + (profile.apiPath || '/v1');
+  const sampling = profile.sampling || {}; // provider 권장 샘플링 기본값(GLM 등)
+
+  // 샘플링 파라미터를 요청 body 에 적용한다. 우선순위: 호출 options > profile.sampling.
+  // (GLM-5.2 권장값 temp=1.0/top_p=0.95/top_k=40 같은 모델별 기본값을 provider 에 둘 수 있게 함)
+  function applySampling(body, options) {
+    const temp = options.temperature ?? sampling.temperature;
+    if (temp != null) body.temperature = temp;
+    const topP = options.top_p ?? sampling.top_p;
+    if (topP != null) body.top_p = topP;
+    const topK = options.top_k ?? sampling.top_k;
+    if (topK != null) body.top_k = topK;
+    const minP = options.min_p ?? sampling.min_p;
+    if (minP != null) body.min_p = minP;
+    const rp = options.repeat_penalty ?? sampling.repeat_penalty;
+    if (rp != null) body.repeat_penalty = rp;
+    if (options.num_predict != null) body.max_tokens = options.num_predict;
+    // 추론(thinking) 토글 등 비표준 파라미터 — llama-server/vLLM 의 확장 필드.
+    if (options.chat_template_kwargs) body.chat_template_kwargs = options.chat_template_kwargs;
+    if (options.reasoning_format) body.reasoning_format = options.reasoning_format;
+  }
+
+  // provider 고정 추가 필드(extraBody)를 병합한다. 호출별 body 가 이미 가진 키는 덮어쓰지 않는다.
+  function mergeExtraBody(body) {
+    if (profile.extraBody && typeof profile.extraBody === 'object') {
+      for (const [k, v] of Object.entries(profile.extraBody)) {
+        if (!(k in body)) body[k] = v;
+      }
+    }
+  }
+
+  // GLM/DeepSeek 계열은 thinking 을 message.reasoning_content 로 분리해 반환한다.
+  // 정상 응답이면 content 가 최종 답. content 가 비고 reasoning_content 만 온 경우만 폴백.
+  function pickContent(msg) {
+    const content = msg?.content;
+    if (content != null && content !== '') return content;
+    if (msg?.reasoning_content) return msg.reasoning_content;
+    return content ?? '';
+  }
 
   async function chat({ model, messages, options = {}, timeoutMs }) {
     const t0 = performance.now();
     const body = { model, messages, stream: false };
-    if (options.temperature != null) body.temperature = options.temperature;
-    if (options.top_p != null) body.top_p = options.top_p;
-    if (options.num_predict != null) body.max_tokens = options.num_predict;
+    applySampling(body, options);
+    mergeExtraBody(body);
     const j = await postJson(profile, base + '/chat/completions', body, timeoutMs);
     const choice = j.choices?.[0];
     return {
-      content: choice?.message?.content ?? '',
+      content: pickContent(choice?.message),
       inTokens: j.usage?.prompt_tokens ?? 0,
       outTokens: j.usage?.completion_tokens ?? 0,
       durationMs: Math.round(performance.now() - t0),
@@ -100,8 +137,8 @@ export function createOpenAICompatProvider(profile) {
     const t0 = performance.now();
     const body = { model, prompt, stream: false };
     if (suffix != null && suffix !== '') body.suffix = suffix;
-    if (options.temperature != null) body.temperature = options.temperature;
-    if (options.num_predict != null) body.max_tokens = options.num_predict;
+    applySampling(body, options);
+    mergeExtraBody(body);
     const j = await postJson(profile, base + '/completions', body, timeoutMs);
     const choice = j.choices?.[0];
     return {

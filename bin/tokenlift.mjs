@@ -90,7 +90,11 @@ const HELP = `tokenlift v${VERSION} — 로컬/온프렘 LLM 위임 브리지
       --prefix/--suffix  (complete) FIM 접두/접미
       --host <url>       백엔드 호스트 override
       --timeout <ms>     요청 타임아웃
-      --temp <n>         temperature
+      --temp <n>         temperature (미지정 시 provider 권장값 또는 0.1)
+      --top-p <n>        top-p (nucleus) 샘플링
+      --top-k <n>        top-k 샘플링
+      --min-p <n>        min-p 샘플링
+      --think <on|off>   추론(thinking) 토글 (GLM/llama.cpp openai-compat 전용)
       --num-ctx <n>      컨텍스트 윈도우 토큰 수(ollama)
       --json             기계 판독용 JSON 출력
   -q, --quiet            stderr 메타(토큰/비용) 출력 억제
@@ -199,10 +203,29 @@ async function main() {
     provider = createProvider(profile);
     model = flags.model || a.model || pickModel(cmd, profile);
 
+    // 샘플링 우선순위: 명시 플래그 > provider.sampling(모델별 권장) > 전역 generation 기본값.
+    // (GLM-5.2 처럼 권장 샘플링이 다른 모델은 provider.sampling 으로 중앙 관리됨)
+    const samp = profile.sampling || {};
     const options = {};
-    options.temperature = flags.temp != null ? Number(flags.temp) : config.generation?.temperature ?? 0.1;
+    options.temperature =
+      flags.temp != null ? Number(flags.temp)
+      : samp.temperature != null ? samp.temperature
+      : config.generation?.temperature ?? 0.1;
+    // top_p/top_k/min_p 는 레거시 동작 보존을 위해 (플래그 또는 provider.sampling) 있을 때만 전달.
+    const topP = flags['top-p'] != null ? Number(flags['top-p']) : samp.top_p;
+    if (topP != null) options.top_p = topP;
+    const topK = flags['top-k'] != null ? Number(flags['top-k']) : samp.top_k;
+    if (topK != null) options.top_k = topK;
+    const minP = flags['min-p'] != null ? Number(flags['min-p']) : samp.min_p;
+    if (minP != null) options.min_p = minP;
+    if (samp.repeat_penalty != null) options.repeat_penalty = samp.repeat_penalty;
     if (flags['num-ctx']) options.num_ctx = Number(flags['num-ctx']);
     else if (profile.numCtx) options.num_ctx = profile.numCtx;
+    // --think on|off : GLM/llama.cpp 의 추론(thinking) 토글. openai-compat 백엔드에만 전달.
+    if (flags.think != null && profile.type === 'openai-compat') {
+      const enable = /^(on|true|1|yes|enable)$/i.test(String(flags.think));
+      options.chat_template_kwargs = { enable_thinking: enable };
+    }
 
     try {
       if (cmd === 'complete') {
