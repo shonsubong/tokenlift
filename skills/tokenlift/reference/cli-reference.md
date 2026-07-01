@@ -59,6 +59,7 @@
 | `doctor` | Node/설정/백엔드 연결/필수 모델 점검 (`--provider` 가능) |
 | `warmup -m <model>` | 모델을 메모리에 선적재(연속 위임 전 권장) |
 | `stats` | 누적 위임 횟수·토큰·Bedrock 환산 절감액(백엔드별) |
+| `secure init\|doctor\|status` | NemoClaw 보안 게이트웨이 자동 적용/점검(Bedrock→게이트웨이, 온프렘 예외, 민감폴더 차단). `docs/15` 참조 |
 | `help` | 도움말 |
 
 ## 플래그

@@ -130,6 +130,41 @@
         "enabled": { "type": "boolean" },
         "file": { "type": "string" }
       }
+    },
+    "security": {
+      "type": "object",
+      "description": "NemoClaw 보안 게이트웨이 자동 적용(tokenlift secure). Bedrock 트래픽을 게이트웨이로 우회(필터)시키고 온프렘은 직결(예외), 민감 폴더는 Claude Code 에서 접근 차단한다.",
+      "properties": {
+        "enabled": { "type": "boolean", "description": "보안 자동적용 활성화" },
+        "claudeSettingsPath": { "type": "string", "description": "적용 대상 Claude Code settings.json 경로" },
+        "gateway": {
+          "type": "object",
+          "properties": {
+            "url": { "type": "string", "description": "NemoClaw 게이트웨이 URL(Bedrock 트래픽 경유지)" },
+            "authTokenEnv": { "type": "string", "description": "게이트웨이 인증 토큰 환경변수명" }
+          }
+        },
+        "bedrock": {
+          "type": "object",
+          "properties": {
+            "region": { "type": "string" },
+            "runtimeHost": { "type": "string", "description": "AWS Bedrock Runtime 호스트" },
+            "useMantle": { "type": "boolean", "description": "Anthropic API 형태 Mantle 엔드포인트 사용 여부" }
+          }
+        },
+        "exemptHosts": {
+          "type": "array", "items": { "type": "string" },
+          "description": "게이트웨이/필터 우회(직결)할 신뢰 호스트 = 보안 예외(온프렘 provider host 와 일치)"
+        },
+        "sensitivePaths": {
+          "type": "array", "items": { "type": "string" },
+          "description": "유출 차단할 민감 경로/글롭 → Claude Code permissions.deny(Read) + sandbox.denyRead 로 변환"
+        },
+        "allowReadRoots": {
+          "type": "array", "items": { "type": "string" },
+          "description": "(선택) OS 샌드박스 읽기 허용 루트"
+        }
+      }
     }
   }
 }

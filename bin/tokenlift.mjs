@@ -10,6 +10,10 @@ import { buildTask, TASK_LIST } from '../src/tasks.mjs';
 import { pickModel, recommend, resolveRole, costTier } from '../src/router.mjs';
 import { estimateSavings, logUsage, readStats, formatStats } from '../src/logger.mjs';
 import {
+  getSecurity, buildGeneratedSettings, mergeSettings, readSettings, writeSettings,
+  pingGateway, auditPosture,
+} from '../src/secure.mjs';
+import {
   readFileSafe, writeFileSafe, extractCode, stripThink,
   readStdin, eprint, fmtUsd, fmtMs,
 } from '../src/util.mjs';
@@ -25,7 +29,7 @@ function parseArgs(argv) {
     let a = argv[i];
     if (a.startsWith('--')) {
       const key = a.slice(2);
-      if (['quiet', 'json', 'no-log', 'apply', 'help', 'version'].includes(key)) {
+      if (['quiet', 'json', 'no-log', 'apply', 'help', 'version', 'dry-run'].includes(key)) {
         flags[key === 'no-log' ? 'noLog' : key] = true;
       } else {
         const val = argv[++i];
@@ -76,7 +80,14 @@ const HELP = `tokenlift v${VERSION} — 로컬/온프렘 LLM 위임 브리지
   stats      누적 절감 통계
   warmup     모델 메모리 선적재          예) tokenlift warmup -m qwen2.5-coder:14b
   doctor     환경 점검                  예) tokenlift doctor --provider nemoclaw
+  secure     NemoClaw 보안 게이트웨이 자동 적용/점검 (init|doctor|status)
   help       이 도움말
+
+보안(secure) 하위명령:
+  secure init     Claude Code settings.json 에 보안 설정 주입(Bedrock→게이트웨이,
+                  온프렘 직결 예외, 민감폴더 차단). 기존 설정 보존+백업. (--dry-run 지원)
+  secure doctor   현재 보안 태세 점검(게이트웨이 도달성 + settings 적용 여부)
+  secure status   적용될 보안 설정 미리보기
 
 옵션:
   -p, --provider <name>  백엔드 선택 (ollama | nemoclaw | onprem-h200 | onprem-v100 ...)
@@ -160,6 +171,7 @@ async function main() {
   if (cmd === 'doctor') return cmdDoctor(config, flags);
   if (cmd === 'warmup') return cmdWarmup(config, flags);
   if (cmd === 'route') return cmdRoute(config, flags);
+  if (cmd === 'secure') return cmdSecure(config, flags);
 
   if (![...TASK_LIST].includes(cmd)) {
     eprint(`알 수 없는 명령: ${cmd}\n'tokenlift help' 로 사용법 확인`);
@@ -436,6 +448,77 @@ async function cmdRoute(config, flags) {
   } else {
     console.log(`\n→ Claude(Bedrock)가 직접 처리. 현황 파악은 codebase-memory-mcp 그래프로.`);
   }
+}
+
+// ---------- secure: NemoClaw 보안 게이트웨이 자동 적용 ----------
+async function cmdSecure(config, flags) {
+  const sub = flags._.shift() || 'status';
+  const sec = getSecurity(config);
+  const gen = buildGeneratedSettings(sec);
+
+  if (sub === 'status') {
+    console.log('# TokenLift 보안 태세 (security → Claude Code 적용 예정 설정)');
+    console.log(`대상 settings: ${sec.claudeSettingsPath}`);
+    console.log(`게이트웨이(Bedrock 경유): ${sec.gateway.url}`);
+    console.log(`온프렘 예외(직결): ${sec.exemptHosts.join(', ')}`);
+    console.log(`Bedrock 목적지: ${sec.bedrock.runtimeHost}`);
+    console.log(`\n생성될 env:`);
+    for (const [k, v] of Object.entries(gen.env)) console.log(`  ${k}=${v}`);
+    console.log(`\n생성될 permissions.deny (${gen.permissions.deny.length}개):`);
+    if (gen.permissions.deny.length === 0) console.log('  (security.sensitivePaths 가 비어 있음 — 민감 폴더 경로를 채우세요)');
+    for (const d of gen.permissions.deny) console.log(`  ${d}`);
+    if (gen.sandbox) console.log(`\n생성될 sandbox.filesystem: ${JSON.stringify(gen.sandbox.filesystem)}`);
+    console.log(`\n적용: tokenlift secure init   |   점검: tokenlift secure doctor`);
+    return;
+  }
+
+  if (sub === 'init') {
+    const existing = readSettings(sec.claudeSettingsPath);
+    const { merged, changes } = mergeSettings(existing, gen);
+    if (changes.length === 0) {
+      console.log('✅ 이미 최신 보안 설정이 적용되어 있습니다(변경 없음).');
+      return;
+    }
+    console.log(`# ${sec.claudeSettingsPath} 에 적용할 변경 (${changes.length}건):`);
+    for (const c of changes) console.log(`  + ${c}`);
+    if (flags['dry-run']) {
+      console.log('\n(--dry-run) 실제로 쓰지 않았습니다. 적용하려면 --dry-run 없이 실행하세요.');
+      return;
+    }
+    const { path: written, backup } = writeSettings(sec.claudeSettingsPath, merged);
+    console.log(`\n✅ 적용 완료: ${written}${backup ? ` (백업: ${backup})` : ''}`);
+    console.log('→ Claude Code 를 재시작하면 Bedrock 트래픽이 게이트웨이를 경유합니다.');
+    console.log('→ 점검: tokenlift secure doctor');
+    return;
+  }
+
+  if (sub === 'doctor') {
+    console.log('# TokenLift 보안 점검');
+    if (!sec.enabled) { console.log('security.enabled=false — 보안 자동적용이 꺼져 있습니다.'); return; }
+
+    const g = await pingGateway(sec.gateway.url, Number(flags.timeout) || 4000);
+    console.log(`게이트웨이(${sec.gateway.url}): ${g.ok ? `✅ 응답(HTTP ${g.status})` : `❌ 도달 실패 (${g.error})`}`);
+    if (!g.ok) {
+      console.log('  → WSL2 안에서 NemoClaw 게이트웨이가 떠 있는지 확인(GPU 불필요). Issue #208: onboard 시 --gpu 강제 버그.');
+    }
+
+    const settings = readSettings(sec.claudeSettingsPath);
+    const hasSettings = Object.keys(settings).length > 0;
+    console.log(`settings.json(${sec.claudeSettingsPath}): ${hasSettings ? '있음' : '없음 → tokenlift secure init 먼저'}`);
+
+    const checks = auditPosture(sec, settings);
+    let fail = 0;
+    for (const c of checks) {
+      if (!c.ok) fail++;
+      console.log(`  ${c.ok ? '✅' : '❌'} ${c.label}\n      ${c.detail}`);
+    }
+    console.log(fail === 0 && g.ok ? '\n보안 태세 정상 ✅' : `\n${fail}개 항목 미충족${g.ok ? '' : ' + 게이트웨이 미도달'} ⚠️  → tokenlift secure init 로 보정`);
+    if (fail > 0) process.exitCode = 1;
+    return;
+  }
+
+  eprint(`알 수 없는 secure 하위명령: '${sub}'. 사용: secure init | doctor | status`);
+  process.exit(2);
 }
 
 main().catch((err) => {

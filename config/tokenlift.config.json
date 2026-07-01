@@ -151,5 +151,22 @@
   "logging": {
     "enabled": true,
     "file": "~/.tokenlift/usage.jsonl"
+  },
+  "security": {
+    "enabled": true,
+    "_comment": "NemoClaw 보안 게이트웨이 자동 적용(tokenlift secure). Bedrock→게이트웨이(필터), 온프렘→직결(예외), 민감폴더 접근차단. gateway.url/bedrock.region/sensitivePaths 를 사내 환경에 맞게 교체.",
+    "claudeSettingsPath": "~/.claude/settings.json",
+    "gateway": {
+      "url": "http://localhost:8080",
+      "authTokenEnv": "NEMOCLAW_GATEWAY_TOKEN"
+    },
+    "bedrock": {
+      "region": "us-east-1",
+      "runtimeHost": "bedrock-runtime.us-east-1.amazonaws.com",
+      "useMantle": false
+    },
+    "exemptHosts": ["h200.internal", "v100.internal", "localhost", "127.0.0.1"],
+    "sensitivePaths": ["~/.aws/**", "~/.ssh/**", "**/.env", "**/*.pem", "**/*.key", "**/secrets/**"],
+    "allowReadRoots": []
   }
 }

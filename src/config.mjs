@@ -158,6 +158,29 @@ const DEFAULTS = {
   thresholds: { delegateMinOutputLines: 30, delegateMinFileLines: 300, delegateMinFiles: 3 },
   generation: { temperature: 0.1, topP: 0.9 },
   logging: { enabled: true, file: '~/.tokenlift/usage.jsonl' },
+  // ── NemoClaw 보안 게이트웨이 자동 적용 (tokenlift secure) ──
+  // Windows(WSL2) PC 의 Claude Code(Bedrock) 트래픽을 NemoClaw 게이트웨이로 우회시켜
+  // PII redaction/정책 필터를 강제하고, 온프렘 LLM 은 직결(예외), 민감 폴더는 접근 차단한다.
+  // 'tokenlift secure init' 이 아래 값으로 Claude Code settings.json 을 안전 병합한다.
+  security: {
+    enabled: true,
+    claudeSettingsPath: '~/.claude/settings.json', // 적용 대상(개인). 팀 공유면 .claude/settings.json
+    gateway: {
+      url: 'http://localhost:8080', // NemoClaw 게이트웨이 주소(온보딩 시 출력값으로 교체)
+      authTokenEnv: 'NEMOCLAW_GATEWAY_TOKEN',
+    },
+    bedrock: {
+      region: 'us-east-1',
+      runtimeHost: 'bedrock-runtime.us-east-1.amazonaws.com',
+      useMantle: false, // Anthropic API 형태의 Mantle 엔드포인트를 쓰면 true
+    },
+    // 게이트웨이/필터를 우회(직결)할 신뢰 호스트 = 보안 예외. 온프렘 provider 의 host 와 일치시킬 것.
+    exemptHosts: ['h200.internal', 'v100.internal', 'localhost', '127.0.0.1'],
+    // 유출 차단할 민감 경로/글롭. Claude Code 가 아예 못 읽게 한다(유출 원천 차단).
+    // ⚠️ 실제 사내 민감 폴더(예: /mnt/c/Users/<you>/Sensitive)를 추가하세요.
+    sensitivePaths: ['~/.aws/**', '~/.ssh/**', '**/.env', '**/*.pem', '**/*.key', '**/secrets/**'],
+    allowReadRoots: [], // (선택) OS 샌드박스 읽기 허용 루트. 비면 sandbox 미설정.
+  },
 };
 
 /** 깊은 병합 (객체만 재귀, 배열/원시값은 덮어쓰기) */
