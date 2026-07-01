@@ -54,6 +54,11 @@ FLASH_ATTN="${FLASH_ATTN:-on}"          # KV 양자화 사용 시 on 필요
 # 추론(thinking): on(기본, 서버/템플릿 기본값) | off(--reasoning-budget 0 으로 강제 비활성화)
 THINKING="${THINKING:-on}"
 
+# 멀티유저 인증(선택). API_KEY 설정 시 Bearer 토큰 요구(--api-key). 여러 토큰은
+# API_KEY_FILE(줄당 토큰 1개)로 지정. 사용자는 TokenLift 에서 ONPREM_API_KEY 로 동일 값 사용.
+API_KEY="${API_KEY:-}"
+API_KEY_FILE="${API_KEY_FILE:-}"
+
 DOWNLOAD="${DOWNLOAD:-0}"               # 1이면 hf 로 GGUF 다운로드 시도
 
 # ─────────────────────────── 사전 점검 ───────────────────────────
@@ -125,6 +130,13 @@ if [[ "$THINKING" == "off" ]]; then
   ARGS+=( --reasoning-budget 0 )
 fi
 
+# 멀티유저 인증(Bearer 토큰)
+if [[ -n "$API_KEY_FILE" ]]; then
+  ARGS+=( --api-key-file "$API_KEY_FILE" )
+elif [[ -n "$API_KEY" ]]; then
+  ARGS+=( --api-key "$API_KEY" )
+fi
+
 # ─────────────────────────── 구동 ───────────────────────────
 echo "🚀 GLM-5.2 llama-server 구동"
 echo "   model   : $MODEL_PATH"
@@ -132,7 +144,9 @@ echo "   alias   : $ALIAS  (TokenLift onprem-glm 모델 id 와 일치해야 함)
 echo "   listen  : http://$HOST:$PORT/v1"
 echo "   ctx     : $CTX | ngl: $NGL | sampling: temp $TEMP / top_p $TOP_P / top_k $TOP_K"
 echo "   thinking: $THINKING | kv_quant: ${KV_QUANT:-none} | moe_offload: ${N_CPU_MOE:-${OFFLOAD_MOE:+regex}}"
+echo "   parallel: $PARALLEL slots | auth: $([[ -n "$API_KEY$API_KEY_FILE" ]] && echo on || echo off)"
 echo "   (멀티 GPU 는 CUDA_VISIBLE_DEVICES 로 가시 GPU 지정 → -ngl 99 가 자동 분산)"
+echo "   (멀티유저: --host 0.0.0.0 로 사내망 공유. 동시성은 PARALLEL(-np) 로 조정)"
 echo
 echo "+ $LLAMA_SERVER ${ARGS[*]}"
 exec "$LLAMA_SERVER" "${ARGS[@]}"

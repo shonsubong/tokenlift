@@ -72,27 +72,34 @@ const DEFAULTS = {
         },
       },
     },
-    // ── GLM-5.2 (frontier 오픈 모델, 744B MoE / 40B 활성) ──
+    // ── GLM-5.2 (frontier 오픈 모델, 744B MoE / 40B 활성) — 멀티 양자화 tier ──
     // Ollama 로는 부적합 → llama.cpp(llama-server)로 GGUF 동적 양자화 서빙(OpenAI 호환 /v1).
-    // H200 클러스터에서 scripts/run-glm-llamacpp.sh 로 구동. Oracle 역할의 1순위(프런티어).
-    // 권장 샘플링(temp 1.0/top_p 0.95/top_k 40)은 provider.sampling 으로 중앙 관리한다.
-    // 추론(thinking) on/off 는 호출별 --think 또는 구동 시 reasoning-budget 으로 제어.
+    // 여러 양자화 tier(q8/q4/q2)를 scripts/run-glm-fleet.sh 로 사내에 서빙하고, 여러 사용자가
+    // 공유 엔드포인트로 접속한다(멀티유저). task 난도별로 tier 를 라우팅한다.
+    // 앞단 게이트웨이(NemoClaw compatible-endpoint / llama-swap)가 여러 tier 를 하나의 host 로
+    // 합치면 아래처럼 단일 provider 로 model id(=fleet alias)만 바꿔 선택한다. 포트별 직결이면
+    // provider 를 tier 별로 분리(onprem-glm-q8/q4/q2)해도 된다(docs/16 참조).
+    // Oracle 역할의 1순위(프런티어). 권장 샘플링은 provider.sampling 으로 중앙 관리.
     'onprem-glm': {
       type: 'openai-compat',
-      host: 'http://h200.internal:8080', // llama-server 주소(기본 포트 8080)로 교체
+      host: 'http://h200.internal:8080', // 여러 tier 를 합치는 게이트웨이/라우터 주소로 교체
       apiPath: '/v1',
-      apiKeyEnv: 'ONPREM_API_KEY', // 게이트웨이 인증 시에만(에어갭 로컬이면 무인증)
+      apiKeyEnv: 'ONPREM_API_KEY', // 멀티유저: 각 사용자가 발급받은 Bearer 토큰(에어갭이면 무인증)
       supportsFIM: false, // GLM 은 FIM(complete) 대상 아님 → gen/edit 사용
-      models: ['glm-5.2'], // llama-server --alias 로 맞춘 모델 id (/v1/models 미노출 대비 수동 목록)
+      timeoutMs: 1800000, // 대형 quant 콜드 로드/장문 추론 대비(30분). NemoClaw #2403(타임아웃 미반영) 주의
+      models: ['glm-5.2-q8', 'glm-5.2-q4', 'glm-5.2-q2'], // 서빙 중인 quant tier(= fleet alias)
       sampling: { temperature: 1.0, top_p: 0.95, top_k: 40, min_p: 0.0 },
       // 비표준 요청 필드가 필요하면 여기에. 예: { "chat_template_kwargs": { "enable_thinking": false } }
       // extraBody: {},
       routing: {
-        default: 'glm-5.2',
+        // task 난도 → quant tier. q8=최고품질(무거움), q4=균형(거의 무손실), q2=빠름/저비용.
+        // ⚠️ 실제 서빙 중인 tier 로 맞추세요(tokenlift models --provider onprem-glm 로 확인).
+        default: 'glm-5.2-q4',
         byTask: {
-          reason: 'glm-5.2', agent: 'glm-5.2', review: 'glm-5.2',
-          gen: 'glm-5.2', edit: 'glm-5.2', test: 'glm-5.2',
-          refactor: 'glm-5.2', translate: 'glm-5.2', explain: 'glm-5.2', docs: 'glm-5.2',
+          reason: 'glm-5.2-q8', agent: 'glm-5.2-q8', review: 'glm-5.2-q8',
+          gen: 'glm-5.2-q4', edit: 'glm-5.2-q4', test: 'glm-5.2-q4',
+          refactor: 'glm-5.2-q4', translate: 'glm-5.2-q4',
+          explain: 'glm-5.2-q2', docs: 'glm-5.2-q2', fast: 'glm-5.2-q2',
         },
       },
     },

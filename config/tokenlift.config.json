@@ -63,22 +63,24 @@
       "apiPath": "/v1",
       "apiKeyEnv": "ONPREM_API_KEY",
       "supportsFIM": false,
-      "models": ["glm-5.2"],
+      "timeoutMs": 1800000,
+      "models": ["glm-5.2-q8", "glm-5.2-q4", "glm-5.2-q2"],
       "sampling": { "temperature": 1.0, "top_p": 0.95, "top_k": 40, "min_p": 0.0 },
-      "_comment": "GLM-5.2(744B MoE) — Ollama 미지원이라 llama.cpp(llama-server)로 GGUF 양자화 서빙(OpenAI 호환). H200 클러스터에서 scripts/run-glm-llamacpp.sh 로 구동. Oracle 1순위(프런티어). 모델 id 는 llama-server --alias 와 일치시킬 것. extraBody 로 비표준 필드 추가 가능(예: chat_template_kwargs).",
+      "_comment": "GLM-5.2(744B MoE) 멀티 양자화 tier — llama.cpp(llama-server)로 서빙(scripts/run-glm-fleet.sh), 여러 사용자가 공유 host 로 접속(멀티유저). q8=최고품질/q4=균형/q2=빠름. 앞단 게이트웨이(NemoClaw compatible-endpoint/llama-swap)로 여러 tier 를 host 하나에 합치거나, 포트별 직결이면 provider 를 tier 별로 분리. model id 는 fleet alias 와 일치. timeoutMs 는 대형 콜드로드 대비(NemoClaw #2403 주의). docs/16 참조.",
       "routing": {
-        "default": "glm-5.2",
+        "default": "glm-5.2-q4",
         "byTask": {
-          "reason": "glm-5.2",
-          "agent": "glm-5.2",
-          "review": "glm-5.2",
-          "gen": "glm-5.2",
-          "edit": "glm-5.2",
-          "test": "glm-5.2",
-          "refactor": "glm-5.2",
-          "translate": "glm-5.2",
-          "explain": "glm-5.2",
-          "docs": "glm-5.2"
+          "reason": "glm-5.2-q8",
+          "agent": "glm-5.2-q8",
+          "review": "glm-5.2-q8",
+          "gen": "glm-5.2-q4",
+          "edit": "glm-5.2-q4",
+          "test": "glm-5.2-q4",
+          "refactor": "glm-5.2-q4",
+          "translate": "glm-5.2-q4",
+          "explain": "glm-5.2-q2",
+          "docs": "glm-5.2-q2",
+          "fast": "glm-5.2-q2"
         }
       }
     },

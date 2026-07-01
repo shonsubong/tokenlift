@@ -24,6 +24,7 @@
 비용 최소화 사다리 `그래프(무료) → V100(coder) → H200(oracle) → Bedrock(claude)` 에서 충분한
 가장 싼 단계를 쓴다. `tokenlift roles` / `tokenlift route "<작업>"` 로 확인.
 
+- GLM-5.2 멀티 양자화 tier·멀티유저 온프렘 셋업 → [16. GLM-5.2 멀티양자화·팀](docs/16-glm-multiquant-team.md)
 - NemoClaw 보안 게이트웨이 자동 적용(Bedrock 필터 / 온프렘 예외 / 민감폴더 차단) → [15. NemoClaw 보안(Windows/WSL2)](docs/15-nemoclaw-windows-security.md)
 - GLM-5.2 를 llama.cpp 로 온프렘 서빙(프런티어 오픈 모델) → [14. GLM-5.2 × llama.cpp](docs/14-glm-llamacpp.md)
 - 멀티모델 에이전트 라우팅 → [13. 멀티모델 에이전트](docs/13-multi-model-agents.md)
@@ -111,6 +112,7 @@ bash scripts/install.sh
 | 13 | [멀티모델 에이전트](docs/13-multi-model-agents.md) | 역할·에스컬레이션·온프렘 H200/V100 |
 | 14 | [GLM-5.2 × llama.cpp](docs/14-glm-llamacpp.md) | GLM-5.2 양자화 모델 llama-server 서빙 + onprem-glm 연동 |
 | 15 | [NemoClaw 보안(Windows/WSL2)](docs/15-nemoclaw-windows-security.md) | Bedrock→게이트웨이 필터 / 온프렘 예외 / 민감폴더 차단 자동 적용(`tokenlift secure`) |
+| 16 | [GLM-5.2 멀티양자화·팀](docs/16-glm-multiquant-team.md) | 여러 양자화 tier(q2/q4/q8) 서빙 + 멀티유저 공유(`run-glm-fleet.sh`) |
 
 ## 요구사항
 
