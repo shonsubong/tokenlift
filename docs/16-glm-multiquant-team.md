@@ -64,6 +64,49 @@ vllm serve nvidia/GLM-5.2-NVFP4 \
 - 인증: `API_KEY`(→ `--api-key`) 로 Bearer 토큰. 각 사용자는 `ONPREM_API_KEY` 로 동일 값 사용.
 - vLLM 0.19.0+ 필요(GLM-5.2 MoE 지원). 모델은 최초 실행 시 HF 에서 자동 다운로드.
 
+### NemoClaw 에 붙이기 — NVIDIA 공식 NVFP4 (정확 절차)
+
+NVIDIA 는 GLM-5.2 를 [`nvidia/GLM-5.2-NVFP4`](https://huggingface.co/nvidia/GLM-5.2-NVFP4)
+(modelopt v0.46.0, NVFP4 1.0, MIT)로 **정식 배포**했고 **vLLM 이 공식 지원**한다
+(`vllm serve nvidia/GLM-5.2-NVFP4`). NemoClaw 는 이 모델을 **직접 호스팅하지 않고**, 아래
+두 경로 중 하나로 위 vLLM 서버에 붙는다(NVIDIA 문서 기준).
+
+**경로 A — compatible-endpoint (권장): 내가 띄운 vLLM 에 연결**
+```bash
+# 1) 위 16.2 로 vLLM 서빙 (served-model-name = glm-5.2-nvfp4, 포트 8000)
+# 2) NemoClaw 온보드에서 "Other OpenAI-compatible endpoint" 선택
+nemoclaw onboard        # → Endpoint URL / Model ID / API Key 입력
+
+# 비대화형(동일):
+NEMOCLAW_PROVIDER=custom \
+  NEMOCLAW_ENDPOINT_URL=http://host.openshell.internal:8000/v1 \
+  NEMOCLAW_MODEL=glm-5.2-nvfp4 \
+  COMPATIBLE_API_KEY="$TEAM_TOKEN" \
+  nemoclaw onboard --non-interactive
+```
+- **Endpoint URL**: 샌드박스에서 호스트로 닿는 주소 — 보통 `http://host.openshell.internal:8000/v1`
+  (localhost 아님. 샌드박스→`inference.local`→OpenShell L7 프록시→이 URL 로 포워딩).
+- **Model ID**(`NEMOCLAW_MODEL`): vLLM `--served-model-name` 과 **정확히 일치**(`glm-5.2-nvfp4`).
+  서버의 `/v1/models` 가 반환하는 값이다.
+- **API Key**: vLLM 을 `--api-key` 로 띄웠으면 그 토큰, 아니면 `dummy` 가능.
+- 확인: `nemoclaw <name> status` 의 "Inference" 행.
+
+**경로 B — managed vLLM (실험): NemoClaw 가 vLLM 을 직접 관리**
+```bash
+NEMOCLAW_EXPERIMENTAL=1 NEMOCLAW_VLLM_MODEL=<레지스트리 slug> nemoclaw onboard
+```
+- NemoClaw 가 `nemoclaw-vllm` 컨테이너를 시작/재시작하고 `/v1/models` 로 모델을 기록한다.
+- 기존에 `localhost:8000` 에 vLLM 이 떠 있으면 그걸 사용할 수도 있다.
+
+**주의**
+- ⚠️ **NVFP4 는 Blackwell 전용** — H200 이면 `PROFILE=fp8`(zai-org/GLM-5.2-FP8)로 서빙하고
+  `NEMOCLAW_MODEL=glm-5.2-fp8` 로 붙인다.
+- **콜드 로드 타임아웃**: `NEMOCLAW_LOCAL_INFERENCE_TIMEOUT` 를 넉넉히. compatible-endpoint 가
+  이 값을 미반영해 60s 로 끊기는 이슈(#2403)가 있으니 스트림이 끊기면 버전 확인.
+- 이 절차는 **NemoClaw 가 감싸는 에이전트(OpenClaw/Hermes)** 의 추론을 GLM-5.2 로 보내는 것이다.
+  **TokenLift/Claude Code** 는 `onprem-glm` provider 로 vLLM 에 **직결**하며(보안 예외, docs/15),
+  NemoClaw 게이트웨이는 외부 Bedrock 트래픽에만 관여한다 — 둘은 별개 경로다.
+
 ## 16.3 대안 경로 — GGUF + llama.cpp (저VRAM/혼합)
 
 Blackwell 도 없고 8×H200 FP8 적재도 어려운 환경은 Unsloth GGUF 를 llama.cpp 로 서빙한다

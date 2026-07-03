@@ -108,6 +108,11 @@ TokenLift 는 원래 **Bedrock 사용을 최소화**한다(탐색=그래프, 생
 
 결과: `그래프(무료) → V100 → H200 → GLM-5.2(온프렘, 예외) → Bedrock(게이트웨이 보안)`.
 
+> **참고 — 두 가지 "NemoClaw 연결"을 구분**: 이 문서(15)는 **보안 게이트웨이**(외부 Bedrock
+> 트래픽 필터)다. 반면 NemoClaw 를 **추론 provider**로 써서 감싸는 에이전트(OpenClaw/Hermes)의
+> 추론을 **NVIDIA 공식 GLM-5.2(NVFP4)/vLLM 로 보내는** 연결은 별개이며, 정확 절차
+> (compatible-endpoint / managed vLLM, onboard 명령·env)는 [16. GLM 온프렘 셋업](./16-glm-multiquant-team.md#nemoclaw-에-붙이기--nvidia-공식-nvfp4-정확-절차) 참조.
+
 ## 15.5 한계 / 주의 (정직하게)
 
 - **게이트웨이 redaction 은 보조 방어선**이다(PII/시크릿 *패턴* 기반, 우회 가능). 특정 폴더가

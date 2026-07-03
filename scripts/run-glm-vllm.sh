@@ -83,5 +83,10 @@ if [[ "$PROFILE" == "nvfp4" ]]; then
   echo "   ⚠️  NVFP4 는 Blackwell 전용입니다. H200 라면 PROFILE=fp8 로 실행하세요."
 fi
 echo
+echo "   NemoClaw 연결(compatible-endpoint):"
+echo "     NEMOCLAW_PROVIDER=custom NEMOCLAW_ENDPOINT_URL=http://host.openshell.internal:$PORT/v1 \\"
+echo "       NEMOCLAW_MODEL=$SERVED_NAME COMPATIBLE_API_KEY=\"\$TOKEN\" nemoclaw onboard --non-interactive"
+echo "   TokenLift 연결: onprem-glm.host=http://<이 서버>:$PORT  models=[$SERVED_NAME]"
+echo
 echo "+ $VLLM ${ARGS[*]}"
 exec "$VLLM" "${ARGS[@]}"
