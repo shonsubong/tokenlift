@@ -64,12 +64,38 @@ vllm serve nvidia/GLM-5.2-NVFP4 \
 - 인증: `API_KEY`(→ `--api-key`) 로 Bearer 토큰. 각 사용자는 `ONPREM_API_KEY` 로 동일 값 사용.
 - vLLM 0.19.0+ 필요(GLM-5.2 MoE 지원). 모델은 최초 실행 시 HF 에서 자동 다운로드.
 
+### NVIDIA NIM Docker — 공식 컨테이너 (가장 간단)
+
+GLM-5.2 는 **NVIDIA 공식 NIM Docker 컨테이너**로도 제공된다(NGC 카탈로그
+[`nim/zai-org/glm-5.2`](https://catalog.ngc.nvidia.com/orgs/nim/zai-org/containers/glm-5.2)).
+NIM-for-LLMs 런타임 + **SGLang 프로파일**로 돌고, OpenAI 호환 `/v1` 을 노출한다. **양자화는
+NIM 이 HW 에 맞는 프로파일(FP8/NVFP4 등)로 내부 자동 선택** — 사용자가 quant 파일을 고를 필요
+없다. 가중치를 직접 받아 vLLM 을 세팅하는 것보다 간단하다.
+
+```bash
+# NGC API 키 발급(ngc.nvidia.com) 후
+NGC_API_KEY=nvapi-... bash scripts/run-glm-nim.sh
+# 내부적으로:
+#   docker login nvcr.io -u '$oauthtoken' -p $NGC_API_KEY
+#   docker run --rm --gpus all --ipc=host -e NGC_API_KEY=$NGC_API_KEY \
+#     -v ~/.cache/nim:/opt/nim/.cache -p 8000:8000 nvcr.io/nim/zai-org/glm-5.2:<tag>
+```
+- **HW**: 8×B200 / 8×H20 / 8×H200 또는 GPU 메모리 900GB+, 디스크 **736GB+**.
+- **model id**: 기동 후 `curl -s http://localhost:8000/v1/models` 로 확인해 TokenLift `onprem-glm`
+  의 `models`/`routing.default` 와 (NemoClaw 연결 시) `NEMOCLAW_MODEL` 에 그 값을 쓴다.
+- ⚠️ 정확한 이미지 org/경로/**태그**는 NGC 카탈로그 페이지에서 확인해 교체할 것(프로덕션은 고정 태그).
+
+> **정리 — GLM-5.2 의 두 가지 NVIDIA 배포**:
+> 1) **NIM Docker**(`nvcr.io/nim/zai-org/glm-5.2`) = 공식 **컨테이너**(SGLang, HW별 프로파일 자동).
+> 2) **NVFP4 체크포인트**([`nvidia/GLM-5.2-NVFP4`](https://huggingface.co/nvidia/GLM-5.2-NVFP4)) =
+>    **가중치**(Docker 아님). vLLM(`vllm/vllm-openai`)·SGLang(`lmsysorg/sglang`) 공개 이미지로 실행.
+
 ### NemoClaw 에 붙이기 — NVIDIA 공식 NVFP4 (정확 절차)
 
 NVIDIA 는 GLM-5.2 를 [`nvidia/GLM-5.2-NVFP4`](https://huggingface.co/nvidia/GLM-5.2-NVFP4)
-(modelopt v0.46.0, NVFP4 1.0, MIT)로 **정식 배포**했고 **vLLM 이 공식 지원**한다
-(`vllm serve nvidia/GLM-5.2-NVFP4`). NemoClaw 는 이 모델을 **직접 호스팅하지 않고**, 아래
-두 경로 중 하나로 위 vLLM 서버에 붙는다(NVIDIA 문서 기준).
+(가중치, vLLM 공식 지원)와 **NIM Docker**(`nvcr.io/nim/zai-org/glm-5.2`)로 배포했다. NemoClaw 는
+이 모델을 **직접 호스팅하지 않고**, 위에서 띄운 **OpenAI 호환 `/v1` 서버(NIM · vLLM · llama.cpp)**
+에 아래 두 경로 중 하나로 붙는다(NVIDIA 문서 기준).
 
 **경로 A — compatible-endpoint (권장): 내가 띄운 vLLM 에 연결**
 ```bash

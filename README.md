@@ -152,8 +152,10 @@ bash scripts/install.sh
     사내 주소로 설정. 같은 서버를 **NemoClaw/NIM** 으로 서빙해도 됨(openai-compat).
   - 역할별 폴백 체인으로 자동 강등. → [13. 멀티모델 에이전트](docs/13-multi-model-agents.md)
   - (선택) 로컬 PC 에 Ollama 가 있으면 `--provider ollama` 로 개발용 사용 가능.
-- **GLM-5.2(프런티어, oracle 1순위)는 Ollama 가 아니라 vLLM/llama.cpp 로 서빙**한다:
-  - 우선 경로 = **vLLM** + **NVIDIA 공식 NVFP4**(`nvidia/GLM-5.2-NVFP4`, Blackwell) 또는
+- **GLM-5.2(프런티어, oracle 1순위)는 Ollama 가 아니라 NIM Docker / vLLM / llama.cpp 로 서빙**한다:
+  - **NVIDIA 공식 Docker** = **NIM 컨테이너**([`nvcr.io/nim/zai-org/glm-5.2`](https://catalog.ngc.nvidia.com/orgs/nim/zai-org/containers/glm-5.2),
+    SGLang·HW별 프로파일 자동, OpenAI 호환) — 가장 간단(`scripts/run-glm-nim.sh`).
+  - vLLM = **NVIDIA 공식 NVFP4**(`nvidia/GLM-5.2-NVFP4` 가중치, Blackwell) 또는
     **Z.ai 공식 FP8**(`zai-org/GLM-5.2-FP8`, H200). 대안 = **llama.cpp**(Unsloth GGUF).
   - ⚠️ **Ollama 로는 온프렘(로컬) GLM-5.2 양자화가 지원되지 않는다.** 공식 Ollama 라이브러리의
     [`glm-5.2`](https://ollama.com/library/glm-5.2) 는 **`:cloud` 태그뿐이며 Z.ai 클라우드로
