@@ -68,9 +68,18 @@ vllm serve nvidia/GLM-5.2-NVFP4 \
 
 GLM-5.2 는 **NVIDIA 공식 NIM Docker 컨테이너**로도 제공된다(NGC 카탈로그
 [`nim/zai-org/glm-5.2`](https://catalog.ngc.nvidia.com/orgs/nim/zai-org/containers/glm-5.2)).
-NIM-for-LLMs 런타임 + **SGLang 프로파일**로 돌고, OpenAI 호환 `/v1` 을 노출한다. **양자화는
-NIM 이 HW 에 맞는 프로파일(FP8/NVFP4 등)로 내부 자동 선택** — 사용자가 quant 파일을 고를 필요
-없다. 가중치를 직접 받아 vLLM 을 세팅하는 것보다 간단하다.
+NIM-for-LLMs 런타임 + **SGLang 프로파일**로 돌고, OpenAI 호환 `/v1` 을 노출한다. 가중치를
+직접 받아 vLLM 을 세팅하는 것보다 간단하다.
+
+**양자화 지원 — 예, NIM 은 양자화를 "기본"으로 쓴다.** NIM 은 감지한 HW 에 맞는 최적 프로파일을
+자동 선택하는데, **양자화 엔진(fp8 등)이 있으면 메모리·지연·처리량 이점 때문에 기본으로 그것을
+고른다**(양자화 엔진도 fp16 과 동일 정확도 기준으로 검증됨). 프로파일 이름의 숫자 포맷이
+정밀도다(`fp8`=8bit 양자화 vs `fp16`=비양자화). GLM-5.2 는 **FP8 이 권장 배포**이고 Blackwell 에선
+**NVFP4** 도 가능하다. NIM 정밀도 선호순위: `MXFP4 > FP8 > INT8 > FP16 > BF16 > … > NVFP4`,
+백엔드 선호: `tensorrt_llm > vllm > sglang`.
+- 프로파일 목록: `docker run ... <image> list-model-profiles`
+- 특정 프로파일 강제: `-e NIM_MODEL_PROFILE=<id>` (예: fp8 프로파일 고정) — `scripts/run-glm-nim.sh`
+  의 `NIM_MODEL_PROFILE` 로 전달.
 
 ```bash
 # NGC API 키 발급(ngc.nvidia.com) 후
