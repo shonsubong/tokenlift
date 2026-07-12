@@ -84,24 +84,28 @@ ollama pull qwen2.5-coder:32b
 # 일회성: tokenlift gen "..." -m qwen2.5-coder:32b
 ```
 
-## 4.7 온프렘 GPU 클러스터 모델 (H200 / V100, Ollama 특화 모델)
+## 4.7 온프렘 GPU 클러스터 모델 (GLM-5.2 + H200/V100)
 
-H200×8 / V100×8 하드웨어 위에서 **Ollama 에 여러 특화 모델을 올려 task별로 라우팅**한다
-(`config.providers.onprem-h200|onprem-v100.routing`). 모델은 **Ollama 태그**.
+**개발 대부분(executor)과 어려운 추론(oracle)은 GLM-5.2**(프런티어, NIM Docker/vLLM 서빙 —
+Ollama 미지원)가, 경량·정형(coder)은 V100 Ollama 특화 모델이 담당한다
+(`config.providers.onprem-glm|onprem-h200|onprem-v100.routing`).
 
-| 역할 | 클러스터 | 코드 | 추론 | FIM | 문서/경량 |
+| 역할 | 백엔드 | 코드 | 추론 | FIM | 문서/경량 |
 |---|---|---|---|---|---|
-| oracle | H200 | `qwen2.5-coder:32b` | `deepseek-r1:70b` | `qwen2.5-coder:7b` | `llama3.3:70b` |
-| coder | V100 | `qwen2.5-coder:14b` | `deepseek-r1:14b` | `qwen2.5-coder:1.5b-base` | `llama3.1:8b` |
+| **executor/oracle** | **GLM-5.2**(NIM/vLLM) | `glm-5.2-nvfp4`(Blackwell) / `glm-5.2-fp8`(H200) | 〃 `--think on` | — | — |
+| (폴백) | H200 Ollama | `qwen2.5-coder:32b` | `deepseek-r1:70b` | `qwen2.5-coder:7b` | `llama3.3:70b` |
+| coder | V100 Ollama | `qwen2.5-coder:14b` | `deepseek-r1:14b` | `qwen2.5-coder:1.5b-base` | `llama3.1:8b` |
 
 ```bash
-tokenlift models --provider onprem-h200          # 클러스터 보유 태그 확인
-tokenlift gen "..." --role coder                 # = onprem-v100(폴백 체인)
+tokenlift models --provider onprem-glm           # GLM-5.2 served 모델 확인
+tokenlift gen "..." --role executor              # = GLM-5.2(폴백: H200→V100)
+tokenlift gen "..." --role coder                 # = onprem-v100(경량)
 tokenlift gen "..." --provider onprem-h200 -m deepseek-r1:70b
 ```
 
-> 큰/고정밀 모델은 H200, 중소·양자화(GGUF Q4/Q5) 모델은 V100. 태그는 **예시**이니 클러스터에
-> 실제 pull 한 모델로 교체. NemoClaw/NIM 으로 서빙하면 모델명은 NIM 카탈로그 ID 형식이 된다
-> (`config.providers.nemoclaw`). 역할·폴백·비용은 [13. 멀티모델 에이전트](13-multi-model-agents.md).
+> **GLM-5.2 는 Ollama 로컬 태그가 없다**(`:cloud` 는 Z.ai 클라우드 라우팅 — 온프렘 부적합).
+> NIM Docker/vLLM/llama.cpp 로 서빙한다 → [16. GLM 온프렘 셋업](16-glm-multiquant-team.md).
+> H200/V100 Ollama 태그는 **예시**이니 실제 pull 한 모델로 교체. NemoClaw/NIM 서빙이면 모델명은
+> NIM 카탈로그 ID 형식(`config.providers.nemoclaw`). 역할·폴백·비용은 [13](13-multi-model-agents.md) · [18](18-executor-advisor.md).
 
 설치/구성 절차는 [08. 설치/설정](08-installation.md) 참조.

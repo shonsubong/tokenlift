@@ -21,7 +21,8 @@ TokenLift는 4개 레이어로 구성된다.
                 ▼
 ┌──────────────────────────────────────────────────────────────┐
 │ L3. 코어 모듈 레이어 (src/)                                      │
-│   config · router · tasks · logger · util                       │
+│   config · router(기밀 우선 라우팅) · tasks · logger(월 예산)     │
+│   secure(NemoClaw 보안 자동 적용) · util                         │
 │   providers/  ← 백엔드 추상화 (index · ollama · openai-compat)   │
 └───────────────┬──────────────────────────────────────────────┘
                 │ HTTP (REST) — provider 어댑터가 프로토콜 흡수
@@ -47,24 +48,29 @@ TokenLift/
 │   │   ├── ollama.mjs         #   Ollama 어댑터(ollama-client 래핑)
 │   │   └── openai-compat.mjs  #   OpenAI 호환 어댑터(NemoClaw/NIM/vLLM/TGI)
 │   ├── ollama-client.mjs      # Ollama REST 저수준 클라이언트(chat/generate/tags/warmup)
-│   ├── router.mjs             # task→model 선택 + claude/로컬 위임 추천(provider 인지)
+│   ├── router.mjs             # 기밀 신호 평가 + task→역할/모델 선택 + 위임 추천
 │   ├── tasks.mjs              # 태스크별 프롬프트 빌더
-│   ├── logger.mjs             # 사용량 JSONL 로깅 + 절감 추정/집계(provider별)
+│   ├── logger.mjs             # 사용량 JSONL 로깅 + 절감 추정/월 예산 집계
+│   ├── secure.mjs             # NemoClaw 보안 자동 적용(Claude settings 병합·감사)
 │   └── util.mjs               # 파일IO·코드추출·stdin·포맷 유틸
 ├── config/
-│   └── tokenlift.config.json  # 팀 기본 설정(모델 매핑·단가·임계값)
+│   └── tokenlift.config.json  # 팀 기본 설정(백엔드·역할 체인·단가/예산·보안)
 ├── skills/tokenlift/
-│   ├── SKILL.md               # 메인 스킬(트리거·판단·절차)
+│   ├── SKILL.md               # 메인 스킬(트리거·판단·절차·보안 규칙)
 │   └── reference/
 │       ├── cli-reference.md    # CLI 전체 참조
-│       └── routing-rules.md    # 위임 판단 상세 규칙
+│       ├── routing-rules.md    # 위임 판단 상세 규칙(기밀 우선)
+│       └── codebase-memory.md  # 그래프 탐색 도구 참조
 ├── agents/
-│   └── ollama-delegate.md     # 위임 전용 서브에이전트
+│   ├── ollama-delegate.md     # executor/coder 위임 서브에이전트
+│   └── onprem-oracle.md       # oracle(어려운 추론) 서브에이전트
 ├── hooks/
 │   └── suggest-delegation.mjs # UserPromptSubmit 자동감지 훅(선택)
 ├── scripts/
-│   ├── install.ps1            # Windows 설치(스킬/에이전트 배포 + npm link)
-│   └── install.sh             # macOS/Linux 설치
+│   ├── install.ps1 / install.sh   # 설치(스킬/에이전트 배포 + npm link)
+│   ├── run-glm-nim.sh             # GLM-5.2 NIM Docker 서빙(공식 컨테이너)
+│   ├── run-glm-vllm.sh            # GLM-5.2 vLLM 서빙(NVFP4/FP8)
+│   └── run-glm-fleet.sh (+conf)   # GLM-5.2 GGUF 멀티 tier 서빙(llama.cpp)
 └── docs/                      # 본 문서 세트
 ```
 

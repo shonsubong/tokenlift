@@ -113,13 +113,13 @@ tokenlift models --provider onprem-glm   # served 모델(glm-5.2-fp8 등) 확인
 | 목적 | 명령 예시 | 무슨 일이 일어나나 |
 |---|---|---|
 | 탐색/이해 | (Claude가 codebase-memory-mcp 도구 사용) | 파일 통독 대신 그래프 쿼리 → **입력 토큰↓** |
-| 코드 생성 | `tokenlift gen "JWT 검증 미들웨어" --lang ts` | coder(V100) 위임 → 코드만 반환 |
+| 코드 생성 | `tokenlift gen "JWT 검증 미들웨어" --lang ts` | executor(GLM-5.2) 위임 → 코드만 반환 |
 | 테스트 생성 | `tokenlift test -f src/pay.ts -o src/pay.test.ts` | 위임 후 파일 저장, Claude 는 검토만 |
 | 리팩터링 | `tokenlift refactor "함수 분리" -f big.js --apply` | 동작 보존 리팩터 → 원본에 덮어쓰기 |
-| 대용량 요약 | `tokenlift explain -f build.log "실패 원인 5줄"` | 수천 줄 대신 요약만 → **입력 토큰↓** |
+| 대용량 요약 | `tokenlift explain -f build.log "실패 원인 5줄"` | coder(V100), 수천 줄 대신 요약만 → **입력 토큰↓** |
 | 어려운 추론 | `tokenlift gen "동시성 큐 알고리즘" --role oracle --think on` | **GLM-5.2**(oracle 1순위)로 위임, thinking on |
 | 특정 모델 강제 | `tokenlift gen "..." --provider onprem-glm -m glm-5.2-fp8` | 라우팅 무시, 지정 모델 |
-| 라우팅 추천 | `tokenlift route "결제 모듈 보안 설계"` | 위임 여부/역할/티어 추천(설계·보안 → Claude) |
+| 라우팅 추천 | `tokenlift route "결제 모듈 보안 설계"` | 역할/티어 + **기밀도·Bedrock 허용/금지** 판정(기밀→사내 강제, 비민감 설계→advisor) |
 | 운영 | `tokenlift warmup --provider onprem-glm -m glm-5.2-fp8` · `tokenlift stats` | 선적재 · 누적 절감 |
 
 **전형적 흐름(Claude 관점):** 탐색은 그래프 → 무거운 생성은 `tokenlift` 위임 → 반환 코드 검토 →
@@ -136,14 +136,14 @@ tokenlift models --provider onprem-glm   # served 모델(glm-5.2-fp8 등) 확인
 사용자 요청
    │
    ▼
-① Claude Code(TokenLift 스킬) 의도 파악
-   │   설계/보안/모호 → Claude 직접 처리(⑤로)
+① Claude Code(TokenLift 스킬) 의도 파악 + 기밀 검증(tokenlift route)
+   │   기밀 신호 → 사내 강제(Bedrock 금지, ③으로) · 비민감 고난도 → 조언자 Claude(⑤로)
    ▼
 ② 코드 현황 필요? ── yes ──▶ codebase-memory-mcp 그래프 쿼리 (로컬, 입력 토큰↓)
    │ no
    ▼
 ③ 무거운 생성/반복 작업? ── yes ──▶ 역할/티어 결정 (tokenlift route / 휴리스틱)
-   │                                   coder=V100 / oracle=GLM-5.2(H200) …
+   │                                   executor/oracle=GLM-5.2 / 경량 coder=V100 …
    │ no                                     │
    │                                        ▼
    │                          ④ tokenlift <task> 실행 (node CLI)
@@ -163,7 +163,7 @@ tokenlift models --provider onprem-glm   # served 모델(glm-5.2-fp8 등) 확인
 
 ### 시나리오 A — 위임(테스트 생성)
 `tokenlift test -f src/pay.ts` →
-① coder 역할 → ④ V100 서버로 **직결** 위임(실패 시 H200 강등) → 테스트 코드 반환 →
+① executor 역할 → ④ GLM-5.2 로 **직결** 위임(실패 시 H200→V100 강등) → 테스트 코드 반환 →
 ⑤ Claude 가 검토(보안 로직이면 보정) → ⑥ 저장. **Bedrock 은 검토에만, 코드 원문은 사내에 머묾.**
 
 ### 시나리오 B — 어려운 추론(oracle → GLM-5.2)
@@ -171,8 +171,9 @@ tokenlift models --provider onprem-glm   # served 모델(glm-5.2-fp8 등) 확인
 ③ oracle → ④ `onprem-glm`(vLLM, glm-5.2-fp8) **직결**, 체인 `GLM→H200→V100→claude` →
 GLM-5.2 가 추론(reasoning_content 분리)하여 구현 반환 → ⑤ Claude 검토.
 
-### 시나리오 C — 보안(Bedrock 필터 vs 온프렘 예외)
-설계/보안 판단은 ⑤에서 Claude(Bedrock)가 한다. 이때 **게이트웨이가 프롬프트를 필터**하고,
+### 시나리오 C — 보안(기밀 강제 + Bedrock 필터 vs 온프렘 예외)
+**기밀이 감지되면(①) 판단까지 사내 GLM-5.2 가 담당**하고 Bedrock 으로는 아예 가지 않는다.
+비민감 설계/판단만 ⑤에서 Claude(Bedrock)가 하며, 이때 **게이트웨이가 프롬프트를 필터**하고,
 `Sensitive/` 폴더는 `secure init` 이 넣은 `permissions.deny` 로 **읽기 자체가 차단**되어
 유출 경로가 원천 차단된다. 반면 GLM/H200/V100 위임은 `NO_PROXY` 로 **직결(예외)** — 필터
 지연 없이 빠르다.
@@ -183,7 +184,7 @@ GLM-5.2 가 추론(reasoning_content 분리)하여 구현 반환 → ⑤ Claude 
 
 | 증상 | 확인 |
 |---|---|
-| 위임이 Claude 로만 감 | `tokenlift route "<작업>"` 로 신호 확인. 설계/보안 키워드는 의도적으로 Claude |
+| 위임이 Claude 로만 감 | `tokenlift route "<작업>"` 로 신호 확인. 비민감 설계/판단 키워드는 의도적으로 advisor(Claude). 기밀인데 Claude 로 가면 버그 — sensitivePatterns 확인 |
 | GLM 연결 실패 | `tokenlift doctor --provider onprem-glm` — host/토큰/서버 기동 확인 |
 | GLM 이 안 뜸(vLLM) | NVFP4 를 H200 에 올렸는지 확인 → `PROFILE=fp8` 로 재서빙 |
 | 보안 미적용 | `tokenlift secure doctor` → ❌면 `tokenlift secure init` 후 Claude Code 재시작 |

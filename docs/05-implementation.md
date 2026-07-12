@@ -12,9 +12,10 @@
 | `src/providers/ollama.mjs` | Ollama 어댑터(통합 인터페이스) | `createOllamaProvider` |
 | `src/providers/openai-compat.mjs` | OpenAI 호환 어댑터(NemoClaw/NIM 등) | `createOpenAICompatProvider` |
 | `src/ollama-client.mjs` | Ollama REST 저수준 호출 | `chat`, `generate`, `listModels`, `warmup`, `ping` |
-| `src/router.mjs` | 모델 선택·위임 추천(provider 인지) | `pickModel()`, `recommend()` |
+| `src/router.mjs` | 기밀 신호 평가·역할/모델 선택·위임 추천 | `assessSensitivity()`, `pickModel()`, `recommend()`, `resolveRole()` |
 | `src/tasks.mjs` | 태스크별 프롬프트 빌더 | `buildTask()`, `TASK_LIST` |
-| `src/logger.mjs` | 사용량 로깅·절감 추정·집계(provider별) | `estimateSavings`, `logUsage`, `readStats`, `formatStats` |
+| `src/logger.mjs` | 사용량 로깅·절감 추정·월 예산 집계 | `estimateSavings`, `logUsage`, `readStats`, `formatStats` |
+| `src/secure.mjs` | NemoClaw 보안 자동 적용(Claude settings 병합·백업·감사) | `getSecurity`, `buildGeneratedSettings`, `mergeSettings`, `auditPosture` |
 | `src/util.mjs` | 파일IO·코드추출·stdin·포맷 | `extractCode`, `stripThink`, `readStdin`, ... |
 
 ### Provider 통합 인터페이스
@@ -121,9 +122,13 @@ name, type, supportsFIM
 ## 5.5 라우터 (`router.mjs`)
 
 - **`pickModel(task, config, override)`**: override > `byTask[task]` > `default`.
+- **`assessSensitivity(text, config)`**: 기밀 신호 감지 → `{sensitive, matches}`.
+  내장 패턴(개인키/시크릿/AWS·NGC 키/`.internal`/주민번호/기밀 키워드) +
+  `config.security.sensitivePatterns`(문자열 포함 또는 `/정규식/i`).
 - **`recommend(description, config)`**: 키워드 휴리스틱으로
-  `{route, task, model, confidence, reason}` 반환.
-  순서 = ① Claude 유지 신호 ② 위임 신호(구체 task 우선) ③ 기본 Claude.
+  `{route, role, task, model, confidence, reason, sensitivity, bedrockAllowed, sensitiveMatches?}` 반환.
+  순서 = ⓪ 기밀 평가(항상) → ① 고난도 신호(기밀이면 사내 oracle 강제, 비민감이면 advisor)
+  → ② 위임 신호(구체 task 우선; 기밀이면 executor 승급) → ③ 기본(기밀=executor / 비민감=Claude).
 
 ## 5.6 로거 (`logger.mjs`)
 

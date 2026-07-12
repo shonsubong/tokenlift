@@ -110,7 +110,7 @@ tokenlift route "<작업>"                  # 역할/티어/폴백 추천
 tokenlift test -f a.ts --role coder      # V100(실패시 자동 강등)로 대량 위임
 tokenlift gen "알고리즘 구현" --role oracle # H200 로 어려운 작업 위임
 ```
-비용 사다리: 그래프(무료) → V100(coder) → H200(oracle) → Bedrock(claude).
+비용 사다리: 그래프(무료) → V100(coder) → H200 → GLM-5.2(executor/oracle, 사내 무제한) → Bedrock(claude, $200/월).
 설정/모델/인증은 `docs/11-providers.md`, 역할·GPU·비용은 `docs/13-multi-model-agents.md` 참조.
 
 ## 환경변수

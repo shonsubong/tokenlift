@@ -60,12 +60,19 @@ bash scripts/install.sh
 설치 스크립트가 수행하는 일:
 1. `npm link` 로 `tokenlift` 전역 명령 등록(가능 시).
 2. 스킬을 `~/.claude/skills/tokenlift/` 로 복사.
-3. 서브에이전트를 `~/.claude/agents/ollama-delegate.md` 로 복사.
+3. 서브에이전트(`ollama-delegate`, `onprem-oracle`)를 `~/.claude/agents/` 로 복사.
 4. `tokenlift doctor` 로 환경 점검.
 5. (안내) 자동 감지 훅 등록 방법 출력.
 
 > 스크립트는 기존 파일을 덮어쓰기 전 `~/.claude/.tokenlift-backup/` 에 백업을 남긴다.
 > (백업을 `skills/` 안에 두면 그 안의 `SKILL.md` 때문에 중복 스킬로 인식되므로 스캔 범위 밖에 둔다.)
+
+**설치 후(사내 Windows/WSL2 권장 단계)** — NemoClaw 보안 자동 적용:
+```bash
+tokenlift secure status   # 적용될 보안 설정 미리보기(config.security 가 소스)
+tokenlift secure init     # Claude Code settings.json 병합(Bedrock→게이트웨이, 온프렘 예외, 민감폴더 차단)
+tokenlift secure doctor   # 적용/게이트웨이 점검  → 상세: docs/15
+```
 
 ## 8.3 수동 설치
 
