@@ -35,13 +35,22 @@ try {
   const cfg = loadConfig();
   const rec = recommend(prompt, cfg);
 
+  // 기밀 신호가 있으면 위임 여부와 무관하게 "사내 강제" 경고를 최우선 주입한다.
+  const secWarn =
+    rec.sensitivity === 'high'
+      ? `[TokenLift 보안] 🔒 기밀 신호 감지(${(rec.sensitiveMatches || []).join(', ')}). ` +
+        `이 내용(원문)을 Bedrock 프롬프트에 넣지 마세요 — 사내 백엔드(${rec.provider || 'onprem-glm'})로 처리하고, ` +
+        `판단이 필요하면 기밀을 제거·추상화한 질문만 사용하세요. `
+      : '';
+
   if (rec.route === 'local' && rec.task) {
     const provHint = rec.provider && rec.provider !== 'ollama' ? ` --provider ${rec.provider}` : '';
     const hint =
-      `[TokenLift 힌트] 이 요청은 대량/반복 코딩 작업으로 보입니다(추정 task=${rec.task}). ` +
+      secWarn +
+      `[TokenLift 힌트] 이 요청은 대량/반복 코딩 작업으로 보입니다(추정 task=${rec.task}, 역할=${rec.role}). ` +
       `직접 길게 생성하지 말고 'tokenlift ${rec.task} ...${provHint}' (${rec.provider}/${rec.model})로 ` +
-      `로컬 백엔드에 위임해 Bedrock 토큰을 절감하는 것을 우선 검토하세요. 생성물은 반드시 검토 후 ` +
-      `통합하세요. 보안/설계/복잡 디버깅이면 위임하지 말고 직접 처리하세요.`;
+      `사내 백엔드에 위임해 Bedrock 토큰을 절감하는 것을 우선 검토하세요. 생성물은 반드시 검토 후 ` +
+      `통합하세요. 비민감 설계/복잡 디버깅은 조언자(Claude)가 직접, 기밀은 항상 사내에서.`;
     // UserPromptSubmit: stdout 텍스트가 컨텍스트로 추가됨
     process.stdout.write(
       JSON.stringify({
@@ -49,6 +58,13 @@ try {
           hookEventName: 'UserPromptSubmit',
           additionalContext: hint,
         },
+      })
+    );
+  } else if (secWarn) {
+    // 위임 task 미분류라도 기밀이면 경고만 주입(라우터가 사내 executor 를 권고한 상태)
+    process.stdout.write(
+      JSON.stringify({
+        hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: secWarn },
       })
     );
   }
