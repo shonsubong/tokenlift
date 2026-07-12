@@ -96,11 +96,13 @@
     }
   },
   "roles": {
-    "lead": { "style": "orchestration(mechanics)", "chain": ["claude"], "desc": "오케스트레이션·계획·위임·통합 (Bedrock)" },
+    "lead": { "style": "orchestration(mechanics)", "chain": ["claude"], "desc": "오케스트레이션·계획·위임·통합 (Claude Code 자신)" },
     "explorer": { "style": "retrieval", "chain": ["codebase-memory-mcp"], "desc": "코드 탐색/검색/영향분석 (그래프, 무료)" },
-    "coder": { "style": "bulk-code", "chain": ["onprem-v100", "onprem-h200"], "desc": "대량·정형 생성 (V100→H200)" },
+    "executor": { "style": "development-executor", "chain": ["onprem-glm", "onprem-h200", "onprem-v100"], "desc": "실행자 — 개발 대부분·기밀 포함 (GLM-5.2→H200→V100, 사내 전용)" },
+    "coder": { "style": "bulk-code", "chain": ["onprem-v100", "onprem-h200"], "desc": "경량·정형 생성 (V100→H200)" },
     "oracle": { "style": "deep-reasoning", "chain": ["onprem-glm", "onprem-h200", "onprem-v100", "claude"], "desc": "어려운 추론·대형 생성 (GLM-5.2→H200→V100→Bedrock)" },
-    "reviewer": { "style": "judgment", "chain": ["claude"], "desc": "보안·최종 검토·의사결정 (Bedrock)" }
+    "advisor": { "style": "high-IQ-advice", "chain": ["claude"], "desc": "조언자 — 비민감 고난도 판단·설계 조언 (Bedrock, $200/월 예산 관리 대상)" },
+    "reviewer": { "style": "judgment", "chain": ["claude"], "desc": "보안·최종 검토·의사결정 (Bedrock, 기밀은 제거 후)" }
   },
   "escalation": ["codebase-memory-mcp", "onprem-v100", "onprem-h200", "onprem-glm", "claude"],
   "routing": {
@@ -122,10 +124,11 @@
     "fallback": "gemma3:4b"
   },
   "pricing": {
-    "note": "위임으로 절감되는 금액 추정용. 사내 Bedrock 단가에 맞춰 수정하세요. (USD per 1M tokens)",
+    "note": "위임으로 절감되는 금액 추정용. 사내 Bedrock 단가에 맞춰 수정하세요. (USD per 1M tokens). monthlyBudgetUsd = 한 달 Bedrock 목표 예산(stats 가 예산 대비 지표 표시).",
     "label": "claude-sonnet-on-bedrock",
     "inputPer1M": 3.0,
-    "outputPer1M": 15.0
+    "outputPer1M": 15.0,
+    "monthlyBudgetUsd": 200
   },
   "thresholds": {
     "comment": "Claude가 자동 위임 여부를 판단할 때 참고하는 휴리스틱 임계값",
@@ -156,6 +159,7 @@
     },
     "exemptHosts": ["h200.internal", "v100.internal", "localhost", "127.0.0.1"],
     "sensitivePaths": ["~/.aws/**", "~/.ssh/**", "**/.env", "**/*.pem", "**/*.key", "**/secrets/**"],
-    "allowReadRoots": []
+    "allowReadRoots": [],
+    "sensitivePatterns": []
   }
 }

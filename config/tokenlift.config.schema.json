@@ -102,11 +102,12 @@
     },
     "pricing": {
       "type": "object",
-      "description": "절감 추정용 Bedrock 단가(USD per 1M tokens)",
+      "description": "절감 추정용 Bedrock 단가(USD per 1M tokens) + 월 예산",
       "properties": {
         "label": { "type": "string" },
         "inputPer1M": { "type": "number", "minimum": 0 },
-        "outputPer1M": { "type": "number", "minimum": 0 }
+        "outputPer1M": { "type": "number", "minimum": 0 },
+        "monthlyBudgetUsd": { "type": "number", "minimum": 0, "description": "한 달 Bedrock(Claude) 목표 예산(USD). stats 가 이번 달 절감액과 예산 대비 지표를 표시." }
       }
     },
     "thresholds": {
@@ -159,6 +160,10 @@
         "sensitivePaths": {
           "type": "array", "items": { "type": "string" },
           "description": "유출 차단할 민감 경로/글롭 → Claude Code permissions.deny(Read) + sandbox.denyRead 로 변환"
+        },
+        "sensitivePatterns": {
+          "type": "array", "items": { "type": "string" },
+          "description": "내용 기반 기밀 신호(라우팅용). 감지 시 tokenlift route 가 Bedrock 전송 금지 + 사내 GLM 강제. 문자열(포함) 또는 \"/정규식/i\". 내장 패턴(키/시크릿/.internal/주민번호/기밀 키워드)에 추가됨."
         },
         "allowReadRoots": {
           "type": "array", "items": { "type": "string" },

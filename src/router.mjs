@@ -11,17 +11,57 @@ export function pickModel(task, profileOrConfig, override) {
   return (routing.byTask && routing.byTask[task]) || routing.default || 'qwen2.5-coder:14b';
 }
 
-// ── 에이전트 역할 라우팅 (oh-my-openagent 식 오케스트레이터-워커) ──
-// task → 기본 역할. 어려운 추론/에이전트형은 oracle(H200), 나머지 대량 생성은 coder(V100).
+// ── 에이전트 역할 라우팅 (oh-my-openagent 식 오케스트레이터-워커 + 실행자/조언자) ──
+// task → 기본 역할(카테고리). OmO 처럼 "모델이 아니라 카테고리를 고른다".
+//  - executor(실행자): 개발 대부분(생성/수정/테스트/리팩터) → 사내 GLM-5.2 우선(무제한·기밀 안전)
+//  - oracle: 어려운 추론/에이전트형 → 사내 최고지능(GLM-5.2)
+//  - coder: 가볍고 빠른 정형 작업 → V100 소형 모델(요약/문서/FIM)
 const TASK_ROLE = {
   reason: 'oracle', agent: 'oracle',
-  gen: 'coder', edit: 'coder', test: 'coder', refactor: 'coder',
-  translate: 'coder', explain: 'coder', review: 'coder', docs: 'coder',
-  fast: 'coder', complete: 'coder',
+  gen: 'executor', edit: 'executor', test: 'executor', refactor: 'executor',
+  translate: 'executor', review: 'executor',
+  explain: 'coder', docs: 'coder', fast: 'coder', complete: 'coder',
 };
 
 export function roleForTask(task) {
-  return TASK_ROLE[task] || 'coder';
+  return TASK_ROLE[task] || 'executor';
+}
+
+// ── 기밀(민감) 신호 감지 — 보안 우선 라우팅의 1단계 ──
+// 이 신호가 있는 내용은 외부(Bedrock)로 보내지 않고 사내 GLM-5.2 에서 처리한다.
+// (Claude Code 쪽 폴더 차단(permissions.deny)의 보조 계층 — 내용 기반 사전 검증)
+const BUILTIN_SENSITIVE_PATTERNS = [
+  { label: 'private-key', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
+  { label: 'secret-assignment', re: /(?:api[_-]?key|secret|token|password|passwd)\s*[:=]\s*['"]?[A-Za-z0-9_\-]{8,}/i },
+  { label: 'aws-access-key', re: /\bAKIA[0-9A-Z]{16}\b/ },
+  { label: 'ngc-key', re: /\bnvapi-[A-Za-z0-9_\-]{10,}/ },
+  { label: 'internal-host', re: /\b[a-z0-9.-]+\.internal\b/i },
+  { label: 'korean-rrn', re: /\b\d{6}-[1-4]\d{6}\b/ }, // 주민등록번호 형태
+  { label: 'confidential-kw', re: /(사내\s?기밀|대외비|내부\s?전용|고객\s?정보|confidential|proprietary|internal\s+only|do\s+not\s+distribute)/i },
+];
+
+/**
+ * 텍스트의 기밀(민감) 신호 평가. config.security.sensitivePatterns 로 사용자 패턴 추가:
+ *   문자열 → 대소문자 무시 포함 검사, "/re/flags" 형식 → 정규식.
+ * @returns {{sensitive: boolean, matches: string[]}}
+ */
+export function assessSensitivity(text, config) {
+  const t = String(text || '');
+  const matches = [];
+  for (const { label, re } of BUILTIN_SENSITIVE_PATTERNS) {
+    if (re.test(t)) matches.push(label);
+  }
+  for (const p of config?.security?.sensitivePatterns || []) {
+    try {
+      const m = typeof p === 'string' && p.startsWith('/') && p.lastIndexOf('/') > 0
+        ? new RegExp(p.slice(1, p.lastIndexOf('/')), p.slice(p.lastIndexOf('/') + 1))
+        : null;
+      if (m ? m.test(t) : t.toLowerCase().includes(String(p).toLowerCase())) {
+        matches.push(`custom:${p}`);
+      }
+    } catch { /* 잘못된 패턴은 무시 */ }
+  }
+  return { sensitive: matches.length > 0, matches };
 }
 
 // 난도 신호: 위임은 하되 V100(coder) 대신 H200(oracle) 프런티어 모델로 승급해야 하는 작업.
@@ -101,33 +141,73 @@ const DELEGATE_TO_OLLAMA = {
   edit: ['수정', 'edit', '변경', 'change', '추가', 'add '],
 };
 
+/** 역할 이름으로 local 추천 결과를 조립하는 내부 헬퍼 */
+function localRoute(config, roleName, task, providerName, extra) {
+  const role = resolveRole(config, roleName);
+  let profile;
+  let pinnedModel = null;
+  if (providerName) {
+    profile = getProviderProfile(config, providerName);
+  } else if (role && role.primary) {
+    profile = getProviderProfile(config, role.primary.provider);
+    pinnedModel = role.primary.model || null;
+  } else {
+    profile = getProviderProfile(config); // 기본 provider
+  }
+  const fallbacks = role ? role.callableChain.slice(1).map((e) => e.provider) : [];
+  return {
+    route: 'local',
+    role: roleName,
+    provider: profile.name,
+    task,
+    model: task ? pickModel(task, profile, pinnedModel) : (pinnedModel || profile.routing?.default || null),
+    tier: costTier(config, profile.name),
+    fallbacks,
+    ...extra,
+  };
+}
+
 /**
- * 자연어 작업 설명을 받아 라우팅 추천.
- * @param {string} description 작업 설명
- * @param {object} config 전체 설정
- * @param {string} [providerName] 명시 provider(있으면 역할 자동선택보다 우선)
- * @returns {{route:'local'|'claude', role, provider, task, model, tier, confidence, reason}}
+ * 자연어 작업 설명을 받아 라우팅 추천 — 보안(기밀) 우선.
+ * 순서: (0) 기밀 신호 평가 → (1) 고난도 판단 신호 → (2) 위임 신호 → (3) 기본.
+ * 기밀 신호가 있으면 어떤 경우에도 외부(Bedrock) 전송을 권하지 않는다(bedrockAllowed:false).
+ * @returns {{route:'local'|'claude', role, provider, task, model, tier, confidence, reason,
+ *            sensitivity:'high'|'low', bedrockAllowed:boolean, sensitiveMatches?:string[]}}
  */
 export function recommend(description, config, providerName) {
   const text = (description || '').toLowerCase();
+  const sens = assessSensitivity(description, config);
 
-  // 1) Claude 유지 신호 우선
+  // 1) 고난도 판단 신호 (설계/보안판단/근본원인/트레이드오프)
   for (const kw of KEEP_ON_CLAUDE) {
     if (text.includes(kw.toLowerCase())) {
+      if (sens.sensitive) {
+        // 기밀 + 고난도 → 외부 전송 금지. 사내 최고지능(oracle=GLM-5.2)이 처리.
+        return {
+          ...localRoute(config, 'oracle', null, providerName),
+          confidence: 'high',
+          sensitivity: 'high',
+          bedrockAllowed: false,
+          sensitiveMatches: sens.matches,
+          reason: `고난도 신호("${kw}") + 기밀 신호(${sens.matches.join(', ')}) → 외부(Bedrock) 전송 금지, 사내 GLM-5.2(oracle)가 처리. Claude 에게는 기밀을 제거한 추상 질문만.`,
+        };
+      }
       return {
         route: 'claude',
-        role: 'lead',
+        role: 'advisor',
         provider: null,
         task: null,
         model: null,
         tier: costTier(config, 'claude'),
         confidence: 'high',
-        reason: `고난도 판단 신호 감지("${kw}") → Claude(Bedrock) 직접 처리 권장`,
+        sensitivity: 'low',
+        bedrockAllowed: true,
+        reason: `고난도 판단 신호("${kw}") + 기밀 신호 없음 → 조언자(Claude/Bedrock) 직접 처리. 실행은 위임으로.`,
       };
     }
   }
 
-  // 2) 로컬 위임 신호 탐지 (task 분류 포함)
+  // 2) 위임 신호 탐지 (task 분류)
   let best = null;
   for (const [task, kws] of Object.entries(DELEGATE_TO_OLLAMA)) {
     for (const kw of kws) {
@@ -140,36 +220,32 @@ export function recommend(description, config, providerName) {
   }
 
   if (best) {
-    // 역할 → 비용 최적 provider 선택. 명시 providerName 이 있으면 그것을 우선.
-    // 난도 신호가 있으면 coder(V100) → oracle(H200) 로 승급.
     const hard = HARD_SIGNALS.some((kw) => text.includes(kw.toLowerCase()));
-    const roleName = hard ? 'oracle' : roleForTask(best);
-    const role = resolveRole(config, roleName);
-    let profile;
-    let pinnedModel = null;
-    if (providerName) {
-      profile = getProviderProfile(config, providerName);
-    } else if (role && role.primary) {
-      profile = getProviderProfile(config, role.primary.provider);
-      pinnedModel = role.primary.model || null;
-    } else {
-      profile = getProviderProfile(config); // 기본 provider (보통 ollama)
-    }
-    const fallbacks = role ? role.callableChain.slice(1).map((e) => e.provider) : [];
+    // 기밀이면 경량(coder) 작업도 executor(GLM-5.2 체인)로 승급 — "보안 문제 = 사내 GLM" 원칙
+    const roleName = hard ? 'oracle' : sens.sensitive ? 'executor' : roleForTask(best);
     return {
-      route: 'local',
-      role: roleName,
-      provider: profile.name,
-      task: best,
-      model: pickModel(best, profile, pinnedModel),
-      tier: costTier(config, profile.name),
-      fallbacks,
+      ...localRoute(config, roleName, best, providerName),
       confidence: 'medium',
-      reason: `대량/반복 코딩 신호 → '${best}' = '${roleName}' 역할로 '${profile.name}' 위임 권장(비용 최소)`,
+      sensitivity: sens.sensitive ? 'high' : 'low',
+      bedrockAllowed: !sens.sensitive,
+      ...(sens.sensitive ? { sensitiveMatches: sens.matches } : {}),
+      reason:
+        `개발/반복 신호 → '${best}' = '${roleName}' 역할로 사내 위임(실행자)` +
+        (sens.sensitive ? ` · 기밀 신호(${sens.matches.join(', ')}) → Bedrock 승급 금지` : ''),
     };
   }
 
-  // 3) 판단 불가 → 기본은 Claude (안전)
+  // 3) 판단 불가 — 기밀이면 사내 실행자로, 아니면 Claude(조언자)
+  if (sens.sensitive) {
+    return {
+      ...localRoute(config, 'executor', null, providerName),
+      confidence: 'medium',
+      sensitivity: 'high',
+      bedrockAllowed: false,
+      sensitiveMatches: sens.matches,
+      reason: `기밀 신호(${sens.matches.join(', ')}) → 외부(Bedrock) 전송 금지, 사내 실행자(GLM-5.2) 처리`,
+    };
+  }
   return {
     route: 'claude',
     role: 'lead',
@@ -178,6 +254,8 @@ export function recommend(description, config, providerName) {
     model: null,
     tier: costTier(config, 'claude'),
     confidence: 'low',
-    reason: '명확한 위임 신호 없음 → 기본적으로 Claude 처리(필요시 수동 위임)',
+    sensitivity: 'low',
+    bedrockAllowed: true,
+    reason: '명확한 위임/기밀 신호 없음 → 기본적으로 Claude 처리(필요시 수동 위임)',
   };
 }

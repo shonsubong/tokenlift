@@ -128,11 +128,17 @@ const DEFAULTS = {
   // 'claude'(=Bedrock, 에이전트 자신)·'codebase-memory-mcp'(=그래프 MCP)는 위임 대상이 아닌
   // 종단 라벨(= "직접 처리"). chain 항목은 provider 이름(문자열) 또는 {provider, model}.
   roles: {
-    lead: { style: 'orchestration(mechanics)', chain: ['claude'], desc: '오케스트레이션·계획·위임·통합 (Bedrock)' },
+    lead: { style: 'orchestration(mechanics)', chain: ['claude'], desc: '오케스트레이션·계획·위임·통합 (Claude Code 자신)' },
     explorer: { style: 'retrieval', chain: ['codebase-memory-mcp'], desc: '코드 탐색/검색/영향분석 (그래프, 무료)' },
-    coder: { style: 'bulk-code', chain: ['onprem-v100', 'onprem-h200'], desc: '대량·정형 생성 (V100→H200)' },
+    // 실행자(executor): 개발의 대부분(생성·수정·테스트·리팩터·이식·리뷰 초안). 사내 GLM-5.2
+    // (NIM, 무제한·기밀 안전) 우선. OmO 의 Hephaestus(실행 담당)에 대응.
+    executor: { style: 'development-executor', chain: ['onprem-glm', 'onprem-h200', 'onprem-v100'], desc: '실행자 — 개발 대부분·기밀 포함 (GLM-5.2→H200→V100, 사내 전용)' },
+    coder: { style: 'bulk-code', chain: ['onprem-v100', 'onprem-h200'], desc: '경량·정형 생성 (V100→H200)' },
     oracle: { style: 'deep-reasoning', chain: ['onprem-glm', 'onprem-h200', 'onprem-v100', 'claude'], desc: '어려운 추론·대형 생성 (GLM-5.2→H200→V100→Bedrock)' },
-    reviewer: { style: 'judgment', chain: ['claude'], desc: '보안·최종 검토·의사결정 (Bedrock)' },
+    // 조언자(advisor): 기밀 없는 내용의 고난도 판단·설계 조언·최종 검토. Bedrock $200/월
+    // 예산을 아껴 쓰는 대상. OmO 의 Prometheus/Metis(계획·자문)에 대응.
+    advisor: { style: 'high-IQ-advice', chain: ['claude'], desc: '조언자 — 비민감 고난도 판단·설계 조언 (Bedrock, 예산 관리 대상)' },
+    reviewer: { style: 'judgment', chain: ['claude'], desc: '보안·최종 검토·의사결정 (Bedrock, 기밀은 제거 후)' },
   },
   // 비용 최소화 에스컬레이션 사다리: 싼 것 → 비싼 것. 충분한 가장 싼 단계를 먼저 쓴다.
   // onprem-glm(GLM-5.2)은 가장 강력하지만 가장 무거운 온프렘 단계 → Bedrock 직전.
@@ -155,7 +161,9 @@ const DEFAULTS = {
     },
     fallback: 'gemma3:4b',
   },
-  pricing: { label: 'claude-sonnet-on-bedrock', inputPer1M: 3.0, outputPer1M: 15.0 },
+  // monthlyBudgetUsd: 한 달 Bedrock(Claude) 목표 예산. stats 가 이번 달 위임 절감액과 함께
+  // 예산 대비 지표를 보여준다(실제 Bedrock 소비는 Claude Code 의 /cost 로 확인).
+  pricing: { label: 'claude-sonnet-on-bedrock', inputPer1M: 3.0, outputPer1M: 15.0, monthlyBudgetUsd: 200 },
   thresholds: { delegateMinOutputLines: 30, delegateMinFileLines: 300, delegateMinFiles: 3 },
   generation: { temperature: 0.1, topP: 0.9 },
   logging: { enabled: true, file: '~/.tokenlift/usage.jsonl' },
@@ -181,6 +189,10 @@ const DEFAULTS = {
     // ⚠️ 실제 사내 민감 폴더(예: /mnt/c/Users/<you>/Sensitive)를 추가하세요.
     sensitivePaths: ['~/.aws/**', '~/.ssh/**', '**/.env', '**/*.pem', '**/*.key', '**/secrets/**'],
     allowReadRoots: [], // (선택) OS 샌드박스 읽기 허용 루트. 비면 sandbox 미설정.
+    // 내용 기반 기밀 신호(라우팅용). 이 신호가 감지되면 tokenlift route 가 외부(Bedrock) 전송을
+    // 금지하고 사내 GLM-5.2 로 강제한다. 문자열(포함 검사) 또는 "/정규식/i" 형식.
+    // 내장 패턴(개인키/시크릿/AWS·NGC 키/.internal/주민번호/기밀 키워드)에 "추가"된다.
+    sensitivePatterns: [],
   },
 };
 

@@ -164,7 +164,7 @@ async function main() {
   if (flags.noLog) config.logging.enabled = false;
 
   // 운영 명령 분기
-  if (cmd === 'stats') return console.log(formatStats(readStats(config)));
+  if (cmd === 'stats') return console.log(formatStats(readStats(config), config));
   if (cmd === 'roles') return cmdRoles(config);
   if (cmd === 'providers') return cmdProviders(config, flags);
   if (cmd === 'models') return cmdModels(config, flags);
@@ -441,10 +441,14 @@ async function cmdRoute(config, flags) {
   if (rec.model) console.log(`권장 모델: ${rec.model}`);
   if (rec.tier) console.log(`비용 티어: ${rec.tier.tier}/${rec.tier.of} (1=가장 쌈)`);
   if (rec.fallbacks && rec.fallbacks.length) console.log(`폴백 체인: ${rec.fallbacks.join(' → ')}`);
+  console.log(`기밀도: ${rec.sensitivity === 'high' ? `🔒 HIGH (${(rec.sensitiveMatches || []).join(', ')})` : 'low'}`);
+  console.log(`Bedrock 전송: ${rec.bedrockAllowed ? '허용' : '❌ 금지(사내 처리 강제)'}`);
   console.log(`신뢰도: ${rec.confidence}`);
   console.log(`근거: ${rec.reason}`);
   if (rec.route === 'local' && rec.task) {
     console.log(`\n실행 예: tokenlift ${rec.task} "<지시>" -f <파일> --role ${rec.role}`);
+  } else if (rec.route === 'local') {
+    console.log(`\n→ 사내 백엔드(${rec.provider})가 처리. Bedrock 프롬프트에 기밀 원문을 넣지 말 것.`);
   } else {
     console.log(`\n→ Claude(Bedrock)가 직접 처리. 현황 파악은 codebase-memory-mcp 그래프로.`);
   }

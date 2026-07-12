@@ -55,6 +55,7 @@ export function readStats(config) {
     })
     .filter(Boolean);
 
+  const monthKey = new Date().toISOString().slice(0, 7); // YYYY-MM (이번 달)
   const agg = {
     count: entries.length,
     file,
@@ -64,11 +65,18 @@ export function readStats(config) {
     byTask: {},
     byModel: {},
     byProvider: {},
+    month: { key: monthKey, count: 0, grossUsd: 0, inTokens: 0, outTokens: 0 },
   };
   for (const e of entries) {
     agg.inTokens += e.inTokens || 0;
     agg.outTokens += e.outTokens || 0;
     agg.grossUsd += e.grossUsd || 0;
+    if (typeof e.ts === 'string' && e.ts.startsWith(monthKey)) {
+      agg.month.count++;
+      agg.month.grossUsd += e.grossUsd || 0;
+      agg.month.inTokens += e.inTokens || 0;
+      agg.month.outTokens += e.outTokens || 0;
+    }
     if (e.task) {
       agg.byTask[e.task] = agg.byTask[e.task] || { count: 0, grossUsd: 0 };
       agg.byTask[e.task].count++;
@@ -85,8 +93,8 @@ export function readStats(config) {
   return agg;
 }
 
-/** 통계를 사람이 읽기 좋은 문자열로 */
-export function formatStats(agg) {
+/** 통계를 사람이 읽기 좋은 문자열로. config 를 주면 월 예산 대비 지표를 함께 표시. */
+export function formatStats(agg, config) {
   if (agg.count === 0) return `기록 없음 (${agg.file})`;
   const lines = [];
   lines.push(`# TokenLift 누적 위임 통계`);
@@ -94,6 +102,16 @@ export function formatStats(agg) {
   lines.push(`총 위임 횟수: ${agg.count}`);
   lines.push(`로컬 처리 토큰: 입력 ${agg.inTokens.toLocaleString()} / 출력 ${agg.outTokens.toLocaleString()}`);
   lines.push(`Bedrock 환산 대체비용(누적, gross): ${fmtUsd(agg.grossUsd)}`);
+  const budget = config?.pricing?.monthlyBudgetUsd;
+  if (agg.month) {
+    lines.push('');
+    lines.push(`이번 달(${agg.month.key}): 위임 ${agg.month.count}회, Bedrock 환산 절감 ${fmtUsd(agg.month.grossUsd)}`);
+    if (budget > 0) {
+      const pct = Math.round((agg.month.grossUsd / budget) * 100);
+      lines.push(`월 Bedrock 예산: ${fmtUsd(budget)} — 위임이 없었다면 예산의 약 ${pct}% 를 추가 소비했을 양을 사내에서 처리`);
+      lines.push(`  (실제 Bedrock 소비는 Claude Code 의 /cost 로 확인. 예산 초과 조짐이면 위임 비중을 더 높일 것)`);
+    }
+  }
   lines.push('');
   lines.push('백엔드(provider)별:');
   for (const [p, v] of Object.entries(agg.byProvider).sort((a, b) => b[1].grossUsd - a[1].grossUsd)) {

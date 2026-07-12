@@ -99,8 +99,11 @@
 | `onprem-glm` | GLM-5.2 @ llama.cpp(`llama-server`) | openai-compat | **oracle 1순위**(프런티어) | `glm-5.2` |
 | `nemoclaw` | NIM (OpenAI 호환) | openai-compat | (온프렘 대안) | `qwen/qwen2.5-coder-32b-instruct` |
 
-역할은 **폴백 체인**으로 동작(실패 시 자동 강등): coder=V100→로컬→H200, oracle=GLM-5.2→H200→V100→claude.
-GLM-5.2(llama.cpp) 서빙·연동은 `docs/14-glm-llamacpp.md` 참조.
+역할은 **폴백 체인**으로 동작(실패 시 자동 강등): **executor(실행자)=GLM-5.2→H200→V100**(개발
+대부분·기밀 작업), coder=V100→H200(경량), oracle=GLM-5.2→H200→V100→claude, **advisor(조언자)=
+claude**(비민감 고난도 판단, $200/월 예산). `tokenlift route` 가 **기밀도**를 함께 판정해 기밀이면
+Bedrock 전송을 금지하고 사내로 강제한다(`config.security.sensitivePatterns` 로 패턴 추가).
+GLM-5.2 서빙·연동은 `docs/16-glm-multiquant-team.md`, 패턴 상세는 `docs/18-executor-advisor.md` 참조.
 ```bash
 tokenlift roles                          # 역할→폴백 체인 + 비용 에스컬레이션 사다리
 tokenlift route "<작업>"                  # 역할/티어/폴백 추천
