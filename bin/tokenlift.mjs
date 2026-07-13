@@ -18,7 +18,7 @@ import {
   readStdin, eprint, fmtUsd, fmtMs,
 } from '../src/util.mjs';
 
-const VERSION = '0.2.0';
+const VERSION = '0.3.0'; // .claude-plugin/plugin.json 버전과 함께 올린다
 const CODE_TASKS = new Set(['gen', 'edit', 'test', 'refactor', 'translate', 'complete']);
 
 // ---------- 인자 파서 ----------

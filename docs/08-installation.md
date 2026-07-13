@@ -43,29 +43,34 @@ Invoke-WebRequest -Uri https://raw.githubusercontent.com/DeusData/codebase-memor
 설치 후 Claude Code 재시작 → "이 프로젝트 인덱싱해줘" 한 번. 자동 인덱싱:
 `codebase-memory-mcp config set auto_index true`. 자세히 → [12. 코드 탐색 위임](12-codebase-memory.md).
 
-## 8.2 자동 설치 (권장)
+## 8.2 표준 설치 (권장) — 플러그인 + CLI
 
-저장소 루트(`TokenLift/`)에서:
+TokenLift 는 **Claude Code 플러그인**으로 배포된다(이 저장소가 곧 마켓플레이스 —
+`.claude-plugin/marketplace.json`). 두 단계면 끝난다:
 
-### Windows (PowerShell)
-```powershell
-./scripts/install.ps1
+**① Claude 자산(스킬·서브에이전트·훅) = 플러그인 설치** — Claude Code 안에서:
 ```
+/plugin marketplace add shonsubong/tokenlift     # 사내 git 주소도 가능
+/plugin install tokenlift@tokenlift
+```
+- 스킬은 `/tokenlift:tokenlift` 로 네임스페이스되고, 서브에이전트 2종(`tokenlift:ollama-delegate`,
+  `tokenlift:onprem-oracle`)과 **보안 힌트 훅이 `hooks/hooks.json` 으로 자동 등록**된다
+  (settings.json 수동 편집 불필요).
+- **업데이트**: 저장소가 갱신되면 `/plugin marketplace update` → 자동 반영(버전은
+  `.claude-plugin/plugin.json` 의 semver 로 관리). install 스크립트 재실행 불필요.
 
-### macOS / Linux
+**② CLI(tokenlift 명령) = 설치 스크립트** — 플러그인은 npm CLI 를 설치하지 않으므로 1회:
 ```bash
-bash scripts/install.sh
+bash scripts/install.sh                  # macOS/Linux/WSL2
+# Windows PowerShell: ./scripts/install.ps1
 ```
+스크립트가 수행하는 일: `npm link`(실패 시 Windows 는 shim 생성) + `tokenlift doctor` 점검 +
+플러그인 설치 안내 출력.
 
-설치 스크립트가 수행하는 일:
-1. `npm link` 로 `tokenlift` 전역 명령 등록(가능 시).
-2. 스킬을 `~/.claude/skills/tokenlift/` 로 복사.
-3. 서브에이전트(`ollama-delegate`, `onprem-oracle`)를 `~/.claude/agents/` 로 복사.
-4. `tokenlift doctor` 로 환경 점검.
-5. (안내) 자동 감지 훅 등록 방법 출력.
-
-> 스크립트는 기존 파일을 덮어쓰기 전 `~/.claude/.tokenlift-backup/` 에 백업을 남긴다.
-> (백업을 `skills/` 안에 두면 그 안의 `SKILL.md` 때문에 중복 스킬로 인식되므로 스캔 범위 밖에 둔다.)
+> **레거시(플러그인 미사용 환경)**: `bash scripts/install.sh --copy-assets` 가 예전처럼
+> 스킬/에이전트를 `~/.claude/` 로 수동 복사한다(백업: `~/.claude/.tokenlift-backup/`).
+> ⚠️ 플러그인과 병행하면 스킬/에이전트가 **중복**된다 — 플러그인으로 전환할 때는
+> `bash scripts/install.sh --remove-legacy` 로 과거 수동 복사본을 정리하라.
 
 **설치 후(사내 Windows/WSL2 권장 단계)** — NemoClaw 보안 자동 적용:
 ```bash

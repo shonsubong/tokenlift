@@ -1,16 +1,14 @@
 #!/usr/bin/env node
 // suggest-delegation.mjs
-// (선택) Claude Code UserPromptSubmit 훅. 사용자 프롬프트를 키워드 휴리스틱으로 분석해
-// 대량/반복 코딩 작업이면 "Ollama 위임을 고려하라"는 힌트를 컨텍스트로 주입한다.
+// Claude Code UserPromptSubmit 훅. 사용자 프롬프트를 키워드 휴리스틱으로 분석해
+// (1) 기밀 신호가 있으면 "사내 강제 + Bedrock 원문 금지" 보안 경고를,
+// (2) 대량/반복 코딩 작업이면 "사내 위임을 고려하라"는 힌트를 컨텍스트로 주입한다.
 // LLM 호출 없음(즉시). 어떤 경우에도 프롬프트를 차단하지 않는다(항상 exit 0).
 //
-// settings.json 등록 예:
-//   "hooks": {
-//     "UserPromptSubmit": [
-//       { "hooks": [ { "type": "command",
-//         "command": "node \"X:/Work_TokenLift/TokenLift/hooks/suggest-delegation.mjs\"" } ] }
-//     ]
-//   }
+// 등록: 플러그인으로 설치하면 hooks/hooks.json 이 "자동 등록"한다(수동 설정 불필요).
+// (레거시/수동 설치 시에만) settings.json 등록 예:
+//   "hooks": { "UserPromptSubmit": [ { "hooks": [ { "type": "command",
+//     "command": "node \"<repo>/hooks/suggest-delegation.mjs\"" } ] } ] }
 
 import { loadConfig } from '../src/config.mjs';
 import { recommend } from '../src/router.mjs';

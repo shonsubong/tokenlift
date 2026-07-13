@@ -81,8 +81,14 @@ curl -fsSL https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/i
 #     ~/.tokenlift/config.json 의 providers.onprem-h200|onprem-v100.host 를 사내 주소로 설정
 #     (로컬 PC 에 Ollama 를 둘 필요 없음)
 
-# 1) CLI 설치(글로벌 명령 등록)
-cd TokenLift && npm link
+# 1) CLI 설치(글로벌 명령 등록) — 플러그인은 CLI 를 설치하지 않으므로 별도 1회
+bash scripts/install.sh        # Windows: powershell -File scripts/install.ps1
+
+# 1b) Claude Code 플러그인 설치(스킬·서브에이전트·보안 힌트 훅 "자동 등록")
+#     Claude Code 안에서:
+#       /plugin marketplace add shonsubong/tokenlift
+#       /plugin install tokenlift@tokenlift
+#     (업데이트도 /plugin 으로 — install 스크립트 재실행 불필요)
 
 # 2) 환경 점검 (기본 백엔드 = 사내 onprem-v100)
 tokenlift doctor
@@ -97,14 +103,11 @@ tokenlift test -f src/service.py -o tests/test_service.py --role coder
 tokenlift stats
 ```
 
-Claude Code 스킬/서브에이전트 설치는 [설치 가이드](docs/08-installation.md) 참조:
-
-```bash
-# Windows PowerShell
-./scripts/install.ps1
-# macOS/Linux
-bash scripts/install.sh
-```
+> **배포 형태 = Claude Code 플러그인.** 이 저장소가 곧 마켓플레이스다
+> (`.claude-plugin/marketplace.json`). `/plugin install tokenlift@tokenlift` 하나로
+> 스킬(`/tokenlift:tokenlift`)·서브에이전트 2종·보안 힌트 훅(hooks/hooks.json)이 자동
+> 등록되고, 버전 업데이트도 `/plugin` 으로 관리된다. 플러그인을 쓸 수 없는 환경만
+> `install.sh --copy-assets`(레거시 수동 복사). 상세: [설치 가이드](docs/08-installation.md).
 
 설치 후 Claude Code 에서 "토큰 아끼게 이 테스트 Ollama로 작성해줘" 처럼 요청하면
 `tokenlift` 스킬이 자동 발동한다.
@@ -113,12 +116,13 @@ bash scripts/install.sh
 
 | 구성 | 위치 | 역할 |
 |---|---|---|
+| **플러그인 패키지** | `.claude-plugin/plugin.json` (+`marketplace.json`) | 스킬·에이전트·훅을 `/plugin install` 로 배포·버전 관리 |
 | **탐색 그래프 통합** | `skills/tokenlift/` + [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp) | 코드 탐색을 지식 그래프로(입력 토큰↓) — 기본 |
 | 브리지 CLI | `bin/`, `src/` | 백엔드에 코딩 작업 위임(출력 토큰↓), 절감 로깅 |
 | Provider 어댑터 | `src/providers/` | ollama / openai-compat(NemoClaw·NIM 등) 백엔드 추상화 |
 | Claude Code 스킬 | `skills/tokenlift/` | 언제 그래프로 탐색하고 무엇을 위임할지 Claude 에게 지시 |
 | 서브에이전트 | `agents/ollama-delegate.md` | 위임 작업을 격리 실행(그래프로 컨텍스트 수집) |
-| 자동 감지 훅 | `hooks/suggest-delegation.mjs` | 프롬프트 분석 후 위임 힌트 주입(선택) |
+| 자동 감지 훅 | `hooks/` (`hooks.json` + `suggest-delegation.mjs`) | 기밀 경고·위임 힌트 주입 — 플러그인 설치 시 **자동 등록** |
 | 설정 | `config/tokenlift.config.json` | 백엔드·모델 매핑·단가·임계값 |
 
 ## 문서

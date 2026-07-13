@@ -1,0 +1,16 @@
+{
+  "name": "tokenlift",
+  "owner": { "name": "shonsubong" },
+  "metadata": {
+    "description": "TokenLift 사내 배포 마켓플레이스 — Bedrock 토큰 절감 + 보안 우선 라우팅 플러그인"
+  },
+  "plugins": [
+    {
+      "name": "tokenlift",
+      "source": "./",
+      "description": "그래프 탐색 + 온프렘 GLM-5.2 실행자 위임 + 기밀=사내 강제 라우팅 + NemoClaw 보안 자동 적용. 스킬 1(tokenlift) · 서브에이전트 2(ollama-delegate, onprem-oracle) · 보안 힌트 훅 자동 등록. CLI 는 별도 설치(scripts/install.sh)",
+      "category": "productivity",
+      "keywords": ["bedrock", "token-optimization", "onprem", "security"]
+    }
+  ]
+}

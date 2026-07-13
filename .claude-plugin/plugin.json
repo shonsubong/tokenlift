@@ -1,0 +1,10 @@
+{
+  "name": "tokenlift",
+  "version": "0.3.0",
+  "description": "Claude Code(Bedrock) 토큰 절감 — 그래프 탐색(입력↓) + 온프렘 GLM-5.2/Ollama 실행자 위임(출력↓) + 보안 우선 라우팅(기밀=사내 강제, Bedrock 전송 차단) + NemoClaw 보안 자동 적용 + $200/월 예산 운영. CLI(tokenlift)는 별도 설치: scripts/install.sh",
+  "author": { "name": "shonsubong" },
+  "homepage": "https://github.com/shonsubong/tokenlift",
+  "repository": "https://github.com/shonsubong/tokenlift",
+  "license": "MIT",
+  "keywords": ["bedrock", "token-optimization", "onprem", "glm", "nemoclaw", "security-routing"]
+}

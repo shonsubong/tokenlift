@@ -1,7 +1,7 @@
 {
   "name": "tokenlift",
-  "version": "0.1.0",
-  "description": "Claude Code(Bedrock)의 고비용 토큰 작업을 로컬 Ollama 코드 특화 LLM으로 위임하는 브리지 CLI",
+  "version": "0.3.0",
+  "description": "Claude Code(Bedrock)의 고비용 토큰 작업을 사내 온프렘 LLM(GLM-5.2/Ollama)으로 위임하는 브리지 CLI + Claude Code 플러그인",
   "type": "module",
   "bin": {
     "tokenlift": "bin/tokenlift.mjs"

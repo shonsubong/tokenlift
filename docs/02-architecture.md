@@ -38,9 +38,12 @@ TokenLift는 4개 레이어로 구성된다.
 ## 2.2 디렉토리 구조
 
 ```
-TokenLift/
+TokenLift/                     # = Claude Code 플러그인 루트(저장소가 곧 마켓플레이스)
+├── .claude-plugin/
+│   ├── plugin.json            # 플러그인 매니페스트(name/version/설명)
+│   └── marketplace.json       # 마켓플레이스 카탈로그(/plugin marketplace add 대상)
 ├── bin/
-│   └── tokenlift.mjs          # CLI 엔트리(인자 파싱·디스패치·입출력)
+│   └── tokenlift.mjs          # CLI 엔트리(인자 파싱·디스패치·입출력) — 플러그인 밖, npm link 로 설치
 ├── src/
 │   ├── config.mjs             # 설정 로딩/병합(기본<패키지<사용자<env)
 │   ├── providers/             # 백엔드 추상화 레이어
@@ -65,9 +68,10 @@ TokenLift/
 │   ├── ollama-delegate.md     # executor/coder 위임 서브에이전트
 │   └── onprem-oracle.md       # oracle(어려운 추론) 서브에이전트
 ├── hooks/
-│   └── suggest-delegation.mjs # UserPromptSubmit 자동감지 훅(선택)
+│   ├── hooks.json             # 플러그인 훅 자동 등록(UserPromptSubmit)
+│   └── suggest-delegation.mjs # 기밀 경고·위임 힌트 훅
 ├── scripts/
-│   ├── install.ps1 / install.sh   # 설치(스킬/에이전트 배포 + npm link)
+│   ├── install.ps1 / install.sh   # CLI 설치(npm link/shim). --copy-assets=레거시 수동 복사
 │   ├── run-glm-nim.sh             # GLM-5.2 NIM Docker 서빙(공식 컨테이너)
 │   ├── run-glm-vllm.sh            # GLM-5.2 vLLM 서빙(NVFP4/FP8)
 │   └── run-glm-fleet.sh (+conf)   # GLM-5.2 GGUF 멀티 tier 서빙(llama.cpp)
@@ -132,7 +136,9 @@ TokenLift/
 - **외부 패키지**: 없음. Node 표준 라이브러리만 사용.
 - **상태**: `~/.tokenlift/usage.jsonl`(로그), `~/.tokenlift/config.json`(개인 설정, 선택).
   그래프 인덱스는 codebase-memory-mcp 가 `~/.cache/codebase-memory-mcp/` 에 관리.
-- **Claude Code**: 스킬/에이전트/훅 파일을 `~/.claude/` 하위로 배포(설치 스크립트).
+- **Claude Code**: 스킬/에이전트/훅은 **플러그인**(`/plugin install tokenlift@tokenlift`)으로
+  배포·자동 등록된다(플러그인 캐시로 복사됨). 레거시 환경만 설치 스크립트 `--copy-assets` 로
+  `~/.claude/` 수동 복사.
 
 ## 2.7 확장 지점
 

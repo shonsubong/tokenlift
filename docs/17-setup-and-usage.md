@@ -69,9 +69,14 @@ npx nemoclaw init                       # ⚠️ WSL2 에선 --gpu 없이(게이
 
 ```bash
 # WSL2(Ubuntu) 안에서 실행 권장(경로/보안이 그 환경 기준으로 해석됨)
+# ① 플러그인(스킬·에이전트·보안 힌트 훅 자동 등록) — Claude Code 안에서:
+#      /plugin marketplace add shonsubong/tokenlift
+#      /plugin install tokenlift@tokenlift
+# ② CLI(tokenlift 명령) — 플러그인은 CLI 를 설치하지 않으므로 1회:
 git clone <repo> && cd TokenLift
-bash scripts/install.sh                 # 스킬/에이전트 배포 + tokenlift 전역 등록 + doctor
+bash scripts/install.sh                 # npm link/shim + doctor
 #   (Windows PowerShell: powershell -File scripts/install.ps1)
+#   (과거 수동 설치본이 있으면: bash scripts/install.sh --remove-legacy 로 중복 정리)
 ```
 
 `~/.tokenlift/config.json`(개인 오버라이드)에 사내 값을 넣는다:

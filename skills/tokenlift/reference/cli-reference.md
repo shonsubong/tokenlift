@@ -4,11 +4,14 @@
 
 ## 설치 / 호출 방법
 
+> 스킬/서브에이전트/훅은 **플러그인**으로 설치된다(`/plugin install tokenlift@tokenlift`).
+> 아래는 플러그인이 설치하지 않는 **CLI(tokenlift 명령)** 의 호출 방법이다.
+
 세 가지 방법 중 하나로 호출한다.
 
-1. **글로벌 명령 (권장)** — 저장소에서 한 번 링크하면 어디서나 `tokenlift` 사용:
+1. **글로벌 명령 (권장)** — 저장소에서 한 번 등록하면 어디서나 `tokenlift` 사용:
    ```bash
-   cd <설치경로>/TokenLift && npm link
+   cd <설치경로>/TokenLift && bash scripts/install.sh   # npm link(실패 시 Windows shim)
    tokenlift doctor
    ```
 2. **직접 실행** — 링크 없이:
